@@ -334,30 +334,34 @@ end $$;
 -- ─── ads ──────────────────────────────────────────────────────────────────
 create or replace function public.list_ads() returns setof jsonb
 language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'id', a.id, 'source', 'ad', 'title', a.title, 'description', a.description,
-    'image_url', a.image_url, 'url', a.url, 'reward', a.reward,
-    'required_seconds', a.required_seconds, 'per_user_limit', a.per_user_limit,
-    'my_completions', coalesce(c.count, 0), 'ends_at', a.ends_at,
-    'hue', abs(hashtext(a.title)) % 360)
-  from public.advertisements a
-  left join public.ad_completions c on c.ad_id = a.id and c.user_id = public.me().id
-  where a.status = 'active'
-    and (a.starts_at is null or a.starts_at <= now())
-    and (a.ends_at is null or a.ends_at > now())
-  union all
-  select jsonb_build_object(
-    'id', cp.id, 'source', 'campaign', 'title', cp.title, 'description', cp.description,
-    'image_url', cp.image_url, 'url', cp.url, 'reward', (public.get_setting('click_reward'))::int,
-    'required_seconds', 7, 'per_user_limit', 1,
-    'my_completions', case when cc.user_id is null then 0 else 1 end,
-    'ends_at', cp.ends_at, 'hue', abs(hashtext(cp.title)) % 360)
-  from public.campaigns cp
-  left join public.campaign_clicks cc on cc.campaign_id = cp.id and cc.user_id = public.me().id
-  where cp.status = 'active' and cp.user_id <> public.me().id
-    and cp.spent < cp.budget
-    and (cp.ends_at is null or cp.ends_at > now())
-  order by 1->>'source' asc;
+  select ad from (
+    select jsonb_build_object(
+      'id', a.id, 'source', 'ad', 'title', a.title, 'description', a.description,
+      'image_url', a.image_url, 'url', a.url, 'reward', a.reward,
+      'required_seconds', a.required_seconds, 'per_user_limit', a.per_user_limit,
+      'my_completions', coalesce(c.count, 0), 'ends_at', a.ends_at,
+      'hue', abs(hashtext(a.title)) % 360) as ad,
+      1 as ord
+    from public.advertisements a
+    left join public.ad_completions c on c.ad_id = a.id and c.user_id = (public.me()).id
+    where a.status = 'active'
+      and (a.starts_at is null or a.starts_at <= now())
+      and (a.ends_at is null or a.ends_at > now())
+    union all
+    select jsonb_build_object(
+      'id', cp.id, 'source', 'campaign', 'title', cp.title, 'description', cp.description,
+      'image_url', cp.image_url, 'url', cp.url, 'reward', (public.get_setting('click_reward'))::int,
+      'required_seconds', 7, 'per_user_limit', 1,
+      'my_completions', case when cc.user_id is null then 0 else 1 end,
+      'ends_at', cp.ends_at, 'hue', abs(hashtext(cp.title)) % 360) as ad,
+      2 as ord
+    from public.campaigns cp
+    left join public.campaign_clicks cc on cc.campaign_id = cp.id and cc.user_id = (public.me()).id
+    where cp.status = 'active' and cp.user_id <> (public.me()).id
+      and cp.spent < cp.budget
+      and (cp.ends_at is null or cp.ends_at > now())
+  ) x
+  order by x.ord asc;
 $$;
 
 create or replace function public.complete_ad(p_id uuid, p_source text) returns jsonb
@@ -419,7 +423,7 @@ language sql stable security definer set search_path = public as $$
     'deadline', t.deadline, 'status', t.status,
     'my_status', s.status)
   from public.tasks t
-  left join public.task_submissions s on s.task_id = t.id and s.user_id = public.me().id
+  left join public.task_submissions s on s.task_id = t.id and s.user_id = (public.me()).id
   where t.status = 'active' and (t.deadline is null or t.deadline > now())
   order by t.created_at desc;
 $$;
@@ -454,7 +458,7 @@ language sql stable security definer set search_path = public as $$
     'id', id, 'title', title, 'description', description, 'url', url, 'image_url', image_url,
     'budget', budget, 'cpc', cpc, 'clicks', clicks, 'max_clicks', max_clicks,
     'spent', spent, 'status', status, 'created_at', created_at)
-  from public.campaigns where user_id = public.me().id order by created_at desc;
+  from public.campaigns where user_id = (public.me()).id order by created_at desc;
 $$;
 
 create or replace function public.create_campaign(p_title text, p_description text, p_url text, p_image text, p_budget bigint, p_days int) returns jsonb
@@ -612,7 +616,7 @@ create or replace function public.list_transactions(p_limit int default 100) ret
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object('id', id, 'type', type, 'amount', amount,
     'balance_after', balance_after, 'note', note, 'created_at', created_at)
-  from public.transactions where user_id = public.me().id
+  from public.transactions where user_id = (public.me()).id
   order by created_at desc, id desc limit greatest(1, least(p_limit, 500));
 $$;
 
@@ -639,7 +643,7 @@ create or replace function public.list_my_withdrawals() returns setof jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object('id', id, 'coins', coins, 'usdt', usdt, 'address', address,
     'network', network, 'status', status, 'created_at', created_at)
-  from public.withdrawals where user_id = public.me().id order by created_at desc;
+  from public.withdrawals where user_id = (public.me()).id order by created_at desc;
 $$;
 
 -- ─── admin ────────────────────────────────────────────────────────────────
