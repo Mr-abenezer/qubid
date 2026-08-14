@@ -15,20 +15,42 @@ export const hasSupabase = () => Boolean(SUPABASE_URL && SUPABASE_ANON);
 async function ensureSession(sb: SupabaseClient, initDataStr: string) {
   const { data } = await sb.auth.getSession();
   if (data?.session) return;
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON,
-      Authorization: `Bearer ${SUPABASE_ANON}`,
-    },
-    body: JSON.stringify({ init_data: initDataStr }),
-  });
-  if (!res.ok) throw new Error(`Telegram login failed (${res.status})`);
+
+  let res: Response;
+  try {
+    res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`,
+      },
+      body: JSON.stringify({ init_data: initDataStr }),
+    });
+  } catch {
+    throw new Error(
+      "Cannot reach the telegram-login Edge Function (network/CORS). It is most likely not deployed yet — see README step 3.",
+    );
+  }
+
+  if (res.status === 404) {
+    throw new Error("telegram-login Edge Function not found (404). Deploy it: Supabase Dashboard → Edge Functions → New function → paste supabase/functions/telegram-login/index.ts.");
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    const hint =
+      res.status === 401
+        ? " Check the TELEGRAM_BOT_TOKEN secret, and reopen the app fresh from Telegram."
+        : res.status >= 500
+          ? " Check that TELEGRAM_BOT_TOKEN and SUPABASE_SERVICE_ROLE_KEY secrets are set on the function."
+          : "";
+    throw new Error(`telegram-login failed (${res.status})${hint} ${detail.slice(0, 160)}`.trim());
+  }
+
   const { email, token_hash } = await res.json();
-  if (!email || !token_hash) throw new Error("Telegram login returned no session");
+  if (!email || !token_hash) throw new Error("telegram-login returned no session token.");
   const { error } = await sb.auth.verifyOtp({ email, token_hash, type: "magiclink" });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`Session exchange failed: ${error.message}`);
 }
 
 async function rpc<T = unknown>(sb: SupabaseClient, name: string, params?: Record<string, unknown>): Promise<T> {

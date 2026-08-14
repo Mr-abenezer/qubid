@@ -37,15 +37,27 @@ game, and withdraw Coins to USDT — with a full admin panel.
 2. **Frontend env** — `.env` already contains your `VITE_SUPABASE_URL` /
    `VITE_SUPABASE_ANON_KEY` (public by design). Adjust `VITE_APP_URL` if the
    bot link changes.
-3. **Edge Function secrets** (service-role key + bot token stay server-side):
-   ```bash
-   supabase link --project-ref iybyohxhueyzxuzqphjv
-   supabase secrets set TELEGRAM_BOT_TOKEN=***your-token***
-   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=***your-service-role-key***
-   supabase functions deploy telegram-login --no-verify-jwt
-   supabase functions deploy housekeeping --no-verify-jwt
-   ```
-4. **Host the app** — `npm run build`, deploy `dist/` anywhere static
+3. **Edge Functions** (service-role key + bot token stay server-side).
+   Both functions are **zero-dependency** — no CLI needed:
+
+   a. Supabase Dashboard → **Edge Functions** → **New function** → name it
+      `telegram-login` → replace the editor contents with
+      `supabase/functions/telegram-login/index.ts` → **Deploy**.
+   b. Repeat for `housekeeping` using
+      `supabase/functions/housekeeping/index.ts`.
+   c. **Edge Functions → Secrets** (applies to all functions) — add both:
+      - `TELEGRAM_BOT_TOKEN` = your bot token (`8073660163:AAE...`)
+      - `SUPABASE_SERVICE_ROLE_KEY` = the **service_role** key from
+        Project Settings → API (not the anon key).
+
+   CLI alternative:
+    ```bash
+    supabase link --project-ref iybyohxhueyzxuzqphjv
+    supabase secrets set TELEGRAM_BOT_TOKEN=***your-token***
+    supabase secrets set SUPABASE_SERVICE_ROLE_KEY=***your-service-role-key***
+    supabase functions deploy telegram-login --no-verify-jwt
+    supabase functions deploy housekeeping --no-verify-jwt
+    ```4. **Host the app** — `npm run build`, deploy `dist/` anywhere static
    (Vercel, Netlify, Cloudflare Pages, Supabase storage…).
 5. **Telegram bot** — with @BotFather: `/newapp` → pick
    `@BidX_SmartEarningsbot` → set the web app URL to your hosted `dist/`
