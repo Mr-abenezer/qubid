@@ -8,7 +8,7 @@
 //   Dashboard → Edge Functions → "New function" → name: housekeeping
 //   → replace the code with this file → Deploy (verify JWT may stay ON;
 //     the cron caller below sends the anon key).
-// Secrets: TELEGRAM_BOT_TOKEN, SUPABASE_SERVICE_ROLE_KEY (same as telegram-login).
+// Secrets: TELEGRAM_BOT_TOKEN, SERVICE_ROLE_KEY (same as telegram-login).
 //
 // Schedule it (pick one):
 //   • Browser tab / any cron:  every minute call
@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const BASE = Deno.env.get("SUPABASE_URL")!;
-  const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE") ?? "";
+  const SERVICE = Deno.env.get("SERVICE_ROLE_KEY") ?? "";
   const headers = {
     apikey: SERVICE,
     Authorization: `Bearer ${SERVICE}`,

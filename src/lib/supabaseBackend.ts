@@ -42,7 +42,7 @@ async function ensureSession(sb: SupabaseClient, initDataStr: string) {
       res.status === 401
         ? " Check the TELEGRAM_BOT_TOKEN secret, and reopen the app fresh from Telegram."
         : res.status >= 500
-          ? " Check that TELEGRAM_BOT_TOKEN and SUPABASE_SERVICE_ROLE_KEY secrets are set on the function."
+          ? " Check that TELEGRAM_BOT_TOKEN and SERVICE_ROLE_KEY secrets are set on the function (Edge Functions → Secrets). The secret name must not start with SUPABASE_."
           : "";
     throw new Error(`telegram-login failed (${res.status})${hint} ${detail.slice(0, 160)}`.trim());
   }

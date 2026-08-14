@@ -10,7 +10,7 @@
 //   → replace the code with this file → Deploy
 // Then: Dashboard → Edge Functions → Secrets → add:
 //   TELEGRAM_BOT_TOKEN        = 8073660163:AAEyc-DmLQk16CaSSMjIfOg6OHsXfqxPGT8
-//   SUPABASE_SERVICE_ROLE_KEY = <the service_role key from Project Settings → API>
+//   SERVICE_ROLE_KEY        = <the service_role key from Project Settings → API>
 // (SUPABASE_URL is injected automatically.)
 
 const CORS = {
@@ -74,8 +74,9 @@ Deno.serve(async (req) => {
     if (!tid) return json({ error: "initData has no user id" }, 401);
 
     const BASE = Deno.env.get("SUPABASE_URL");
-    const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE");
-    if (!BASE || !SERVICE) return json({ error: "Function secrets not configured (SUPABASE_SERVICE_ROLE_KEY)" }, 500);
+    // NB: secret name must NOT start with SUPABASE_ (reserved by Supabase)
+    const SERVICE = Deno.env.get("SERVICE_ROLE_KEY");
+    if (!BASE || !SERVICE) return json({ error: "Function secrets not configured — add SERVICE_ROLE_KEY and TELEGRAM_BOT_TOKEN under Edge Functions → Secrets" }, 500);
     if (!Deno.env.get("TELEGRAM_BOT_TOKEN")) return json({ error: "Function secrets not configured (TELEGRAM_BOT_TOKEN)" }, 500);
 
     const rest = (path: string, opts: RequestInit = {}) =>

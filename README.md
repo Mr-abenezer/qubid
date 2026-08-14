@@ -47,14 +47,15 @@ game, and withdraw Coins to USDT — with a full admin panel.
       `supabase/functions/housekeeping/index.ts`.
    c. **Edge Functions → Secrets** (applies to all functions) — add both:
       - `TELEGRAM_BOT_TOKEN` = your bot token (`8073660163:AAE...`)
-      - `SUPABASE_SERVICE_ROLE_KEY` = the **service_role** key from
-        Project Settings → API (not the anon key).
+      - `SERVICE_ROLE_KEY` = the **service_role** key from
+        Project Settings → API (not the anon key). The name must NOT start
+        with `SUPABASE_` — that prefix is reserved by Supabase.
 
    CLI alternative:
     ```bash
     supabase link --project-ref iybyohxhueyzxuzqphjv
     supabase secrets set TELEGRAM_BOT_TOKEN=***your-token***
-    supabase secrets set SUPABASE_SERVICE_ROLE_KEY=***your-service-role-key***
+    supabase secrets set SERVICE_ROLE_KEY=***your-service-role-key***
     supabase functions deploy telegram-login --no-verify-jwt
     supabase functions deploy housekeeping --no-verify-jwt
     ```4. **Host the app** — `npm run build`, deploy `dist/` anywhere static
