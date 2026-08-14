@@ -29,9 +29,11 @@ game, and withdraw Coins to USDT — with a full admin panel.
 
 ## Setup (you only do these 6 steps)
 
-1. **Database** — open the Supabase SQL editor (project `iybyohxhueyzxuzqphjv`)
-   and run `supabase/migrations/001_bidx.sql` in full. It creates all 14
-   tables, RLS, RPCs and demo content.
+1. **Database** — open the Supabase SQL editor (project `iybyohxhueyzxuzqphjv`).
+   If a previous attempt already created tables/functions, run
+   `supabase/reset.sql` FIRST (it wipes only Bid X objects, safe on a fresh
+   project). Then run `supabase/migrations/001_bidx.sql` in full — it creates
+   all 14 tables, RLS, RPCs and demo content.
 2. **Frontend env** — `.env` already contains your `VITE_SUPABASE_URL` /
    `VITE_SUPABASE_ANON_KEY` (public by design). Adjust `VITE_APP_URL` if the
    bot link changes.
