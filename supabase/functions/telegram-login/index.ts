@@ -146,6 +146,31 @@ Deno.serve(async (req) => {
         : null);
     if (!token_hash) return json({ error: "No token in generate_link response" }, 500);
 
+    // 5 · link the Supabase auth identity to the Bid X account.
+    //     me() / bootstrap() resolve the caller via users.auth_id = auth.uid(),
+    //     so this write is what makes the session map to the account.
+    let resolved: string | null =
+      (typeof link.id === "string" && link.id) ||
+      (((link.user as Record<string, unknown> | undefined)?.id as string) ?? null);
+    if (!resolved) {
+      const listRes = await fetch(
+        `${BASE}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
+        { headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } },
+      );
+      if (listRes.ok) {
+        const list = (await listRes.json()) as { users?: { id: string }[] };
+        resolved = list.users?.[0]?.id ?? null;
+      }
+    }
+    if (!resolved) {
+      return json({ error: "Could not resolve the auth user id", detail: JSON.stringify(link).slice(0, 300) }, 500);
+    }
+    const linkPatch = await rest(`users?id=eq.${user.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ auth_id: resolved }),
+    });
+    if (!linkPatch.ok) return json({ error: "Failed to link the auth id", detail: await linkPatch.text() }, 500);
+
     return json({ email, token_hash, user: { id: user.id, telegram_id: tid } });
   } catch (e) {
     return json({ error: "telegram-login crashed", detail: String(e) }, 500);

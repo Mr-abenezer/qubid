@@ -78,7 +78,18 @@ export function createSupabaseBackend(initDataStr: string): Backend {
 
     async bootstrap() {
       await ensureSession(sb, initDataStr);
-      return rpc(sb, "bootstrap");
+      try {
+        return await rpc(sb, "bootstrap");
+      } catch (e) {
+        // Self-heal: a stale/orphaned session (e.g. account row predates auth
+        // linking) — sign out, log in fresh once, then retry.
+        if (String((e as Error)?.message ?? "").includes("Account not found")) {
+          await sb.auth.signOut();
+          await ensureSession(sb, initDataStr);
+          return rpc(sb, "bootstrap");
+        }
+        throw e;
+      }
     },
 
     async listAds() { return rpc(sb, "list_ads"); },
