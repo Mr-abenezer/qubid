@@ -1,5 +1,20 @@
+# dependencies — never push these (thousands of files)
 node_modules/
-.next/
+
+# build output — hosts rebuild it, keep the repo clean
 dist/
-build/
+*.tsbuildinfo
+
+# local env files (secrets live in the Supabase dashboard instead)
+.env
+.env.local
+.env.*.local
+
+# OS / editor / host junk
+.DS_Store
+Thumbs.db
+.vercel
+.netlify
 *.log
+.next/
+build/
