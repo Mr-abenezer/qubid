@@ -32,7 +32,6 @@ export default function Wallet() {
   const [filter, setFilter] = useState("all");
   const [coins, setCoins] = useState("");
   const [address, setAddress] = useState("");
-  const [network, setNetwork] = useState("TRC20");
   const [busy, setBusy] = useState(false);
 
   const load = () => {
@@ -59,9 +58,9 @@ export default function Wallet() {
   const submit = async () => {
     if (coinsNum < min) { toast(`Minimum withdrawal is ${fmt(min)} Coins`, "err"); haptic("error"); return; }
     if (coinsNum > wallet.balance) { toast("That's more than your balance", "err"); haptic("error"); return; }
-    if (address.trim().length < 8) { toast("Enter a valid withdrawal address", "err"); haptic("error"); return; }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address.trim())) { toast("Enter a valid BEP20 address (starts with 0x, 42 characters)", "err"); haptic("error"); return; }
     setBusy(true);
-    const res: ActionResult = await api.requestWithdrawal(coinsNum, address.trim(), network).catch((e): ActionResult => ({ ok: false, error: String(e) }));
+    const res: ActionResult = await api.requestWithdrawal(coinsNum, address.trim(), "BEP20").catch((e): ActionResult => ({ ok: false, error: String(e) }));
     setBusy(false);
     if (!res.ok) { toast(res.error ?? "Withdrawal failed", "err"); haptic("error"); return; }
     haptic("success");
@@ -88,13 +87,19 @@ export default function Wallet() {
           </div>
         </div>
         <div className="text-[12px] text-dim mt-3 leading-relaxed">
-          1 Coin = {settings.coin_usdt_rate} USDT. Coins convert to USDT <b className="text-mut">only when you withdraw</b> — minimum {fmt(min)} Coins ({usdtOf(min, settings.coin_usdt_rate)} USDT).
+          1 Coin = {settings.coin_usdt_rate} USDT. Coins convert to USDT <b className="text-mut">only when you withdraw</b> (BEP20) — minimum {fmt(min)} Coins ({usdtOf(min, settings.coin_usdt_rate)} USDT).
         </div>
       </div>
 
       {/* withdraw */}
       <div className="card mt-4 p-4 anim-rise" style={{ animationDelay: "100ms" }}>
-        <div className="text-[13px] font-extrabold uppercase tracking-wider text-mut">Withdraw to USDT</div>
+        <div className="flex items-center justify-between">
+          <div className="text-[13px] font-extrabold uppercase tracking-wider text-mut">Withdraw to USDT</div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-mint/35 bg-mint/10 text-mint px-2.5 py-1 text-[10.5px] font-black uppercase tracking-wider">
+            <span className="w-3.5 h-3.5 rounded-full bg-mint text-[#04241a] flex items-center justify-center text-[8px] font-black">₮</span>
+            BEP20 only
+          </span>
+        </div>
         <div className="mt-3">
           <div className="flex gap-2">
             <div className="relative grow">
@@ -122,11 +127,11 @@ export default function Wallet() {
         </div>
 
         <div className="mt-3">
-          <div className="text-[12.5px] font-bold uppercase tracking-wider text-mut mb-1.5">{network} address</div>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={network === "TRC20" ? "T…" : network === "TON" ? "UQ…" : "0x…"} className="input tnum" />
-        </div>
-        <div className="mt-3">
-          <Seg value={network} onChange={(v) => { setNetwork(v); setAddress(""); }} options={[{ v: "TRC20", label: "TRC20" }, { v: "TON", label: "TON" }, { v: "BEP20", label: "BEP20" }]} />
+          <div className="text-[12.5px] font-bold uppercase tracking-wider text-mut mb-1.5">USDT address · BEP20 (BNB Smart Chain)</div>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x…" className="input tnum" />
+          <div className="text-[11.5px] text-dim mt-1.5 leading-relaxed">
+            Payouts are sent in <b className="text-mut">USDT on BEP20</b> only. Double-check your address — other networks are not supported and funds sent there cannot be recovered.
+          </div>
         </div>
         <Button full size="lg" className="mt-4" loading={busy} onClick={submit} disabled={coinsNum <= 0}>
           <IcoUpR size={18} /> Withdraw {coinsNum > 0 ? `${fmt(coinsNum)} Coins` : ""}

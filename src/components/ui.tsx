@@ -79,6 +79,15 @@ export const IcoSpark = (p: IP) => (
   <Svg {...p} fill><path d="M12 2.5c.7 4.6 2.4 6.3 7 7-4.6.7-6.3 2.4-7 7-.7-4.6-2.4-6.3-7-7 4.6-.7 6.3-2.4 7-7zM19 15.5c.35 2.3 1.2 3.15 3.5 3.5-2.3.35-3.15 1.2-3.5 3.5-.35-2.3-1.2-3.15-3.5-3.5 2.3-.35 3.15-1.2 3.5-3.5z" /></Svg>
 );
 export const IcoInfo = (p: IP) => <Svg {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5M12 7.8v.4" /></Svg>;
+export const IcoGift = (p: IP) => (
+  <Svg {...p}><path d="M4.5 11.5h15V19a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-7.5z" /><path d="M3.5 7.5h17v4h-17zM12 7.5V21M12 7.5C12 5 10.8 3.2 8.9 3.2a2.1 2.1 0 0 0 0 4.2M12 7.5c0-2.5 1.2-4.3 3.1-4.3a2.1 2.1 0 0 1 0 4.2" /></Svg>
+);
+export const IcoCopy = (p: IP) => (
+  <Svg {...p}><rect x="8.5" y="8.5" width="12" height="12" rx="2.2" /><path d="M15.5 5.3v-.5a2.3 2.3 0 0 0-2.3-2.3H5.8a2.3 2.3 0 0 0-2.3 2.3v7.4a2.3 2.3 0 0 0 2.3 2.3h.5" /></Svg>
+);
+export const IcoShare = (p: IP) => (
+  <Svg {...p}><circle cx="6" cy="12" r="2.6" /><circle cx="17.5" cy="5.5" r="2.6" /><circle cx="17.5" cy="18.5" r="2.6" /><path d="M8.4 10.8l6.8-4M8.4 13.2l6.8 4" /></Svg>
+);
 
 /* ─────────────────────────── primitives ─────────────────────────── */
 
@@ -199,6 +208,33 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) =
   return (
     <button onClick={() => onChange(!on)} className={`tap relative w-11 h-6.5 rounded-full transition-colors duration-200 ${on ? "bg-mint" : "bg-line"}`} style={{ height: 26 }}>
       <span className={`absolute top-[3px] w-5 h-5 rounded-full bg-white shadow transition-all duration-200 ${on ? "left-[22px]" : "left-[3px]"}`} />
+    </button>
+  );
+}
+
+export function CopyBtn({ text, label = "Copy", className = "" }: { text: string; label?: string; className?: string }) {
+  const [ok, setOk] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* noop */ }
+      ta.remove();
+    }
+    setOk(true);
+    setTimeout(() => setOk(false), 1400);
+  };
+  return (
+    <button onClick={copy}
+      className={`tap shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-extrabold transition-all duration-200 ${ok ? "border-mint/50 bg-mint/12 text-mint" : "border-line bg-panel2/70 text-mut hover:text-gold hover:border-gold/45"} ${className}`}>
+      {ok ? <IcoCheck size={13} /> : <IcoCopy size={13} />}
+      {ok ? "Copied" : label}
     </button>
   );
 }

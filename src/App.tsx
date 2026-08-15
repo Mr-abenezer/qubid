@@ -5,11 +5,11 @@ import { createMockBackend, resetMock } from "./lib/mock";
 import { createSupabaseBackend, hasSupabase } from "./lib/supabaseBackend";
 import type { Backend } from "./lib/types";
 import { fmt, timeAgo } from "./lib/types";
-import { Avatar, Button, Chip, IcoClock, IcoCoin, IcoGavel, IcoHome, IcoInfo, IcoMega, IcoPlane, IcoRefresh, IcoShield, IcoStack, IcoWallet, IcoX, Modal, Spinner } from "./components/ui";
+import { Avatar, Button, Chip, IcoClock, IcoCoin, IcoFlame, IcoGavel, IcoGift, IcoHome, IcoInfo, IcoMega, IcoPlane, IcoRefresh, IcoShield, IcoWallet, IcoX, Modal, Spinner } from "./components/ui";
 import Home from "./screens/Home";
-import Earn from "./screens/Earn";
-import Arena from "./screens/Arena";
 import Promote from "./screens/Promote";
+import Arena from "./screens/Arena";
+import Invite from "./screens/Invite";
 import Wallet from "./screens/Wallet";
 import Admin from "./screens/Admin";
 
@@ -79,11 +79,11 @@ function Shell({ backend }: { backend: Backend }) {
     <div className="max-w-md mx-auto min-h-screen relative">
       <div className="dotgrid fixed inset-x-0 top-0 h-[420px] pointer-events-none max-w-md mx-auto" />
 
-      <main className="pb-[96px] relative">
+      <main className="pb-[104px] relative">
         {tab === "home" && <Home />}
-        {tab === "earn" && <Earn />}
-        {tab === "arena" && <Arena />}
         {tab === "promote" && <Promote />}
+        {tab === "arena" && <Arena />}
+        {tab === "invite" && <Invite />}
         {tab === "wallet" && <Wallet />}
       </main>
 
@@ -173,27 +173,57 @@ const KV = ({ k, v, mono }: { k: string; v: string; mono?: boolean }) => (
 );
 
 function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
-  const items: { v: Tab; label: string; icon: React.ReactNode }[] = [
+  const left: { v: Tab; label: string; icon: React.ReactNode }[] = [
     { v: "home", label: "Home", icon: <IcoHome size={21} /> },
-    { v: "earn", label: "Earn", icon: <IcoStack size={21} /> },
-    { v: "arena", label: "Bid & Win", icon: <IcoGavel size={21} /> },
     { v: "promote", label: "Promote", icon: <IcoMega size={21} /> },
+  ];
+  const right: { v: Tab; label: string; icon: React.ReactNode }[] = [
+    { v: "invite", label: "Invite", icon: <IcoGift size={21} /> },
     { v: "wallet", label: "Wallet", icon: <IcoWallet size={21} /> },
   ];
+  const arenaActive = tab === "arena";
+
+  const side = (it: { v: Tab; label: string; icon: React.ReactNode }) => {
+    const active = tab === it.v;
+    return (
+      <button key={it.v} onClick={() => setTab(it.v)} className="tap relative flex flex-col items-center gap-1 pt-2.5 pb-2">
+        <span className={`absolute top-0 h-[2.5px] w-8 rounded-full transition-all duration-300 ${active ? "bg-gold shadow-[0_0_10px_rgba(255,194,75,0.7)]" : "bg-transparent"}`} />
+        <span className={`transition-colors duration-200 ${active ? "text-gold" : "text-dim"}`}>{it.icon}</span>
+        <span className={`text-[10px] font-bold tracking-wide transition-colors duration-200 ${active ? "text-gold" : "text-dim"}`}>{it.label}</span>
+      </button>
+    );
+  };
+
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50">
       <div className="max-w-md mx-auto border-t border-line bg-deep/95 backdrop-blur-md safe-b">
-        <div className="grid grid-cols-5">
-          {items.map((it) => {
-            const active = tab === it.v;
-            return (
-              <button key={it.v} onClick={() => setTab(it.v)} className="tap relative flex flex-col items-center gap-1 pt-2.5 pb-2">
-                <span className={`absolute top-0 h-[2.5px] w-8 rounded-full transition-all duration-300 ${active ? "bg-gold shadow-[0_0_10px_rgba(255,194,75,0.7)]" : "bg-transparent"}`} />
-                <span className={`transition-colors duration-200 ${active ? "text-gold" : "text-dim"}`}>{it.icon}</span>
-                <span className={`text-[10px] font-bold tracking-wide transition-colors duration-200 ${active ? "text-gold" : "text-dim"}`}>{it.label}</span>
-              </button>
-            );
-          })}
+        <div className="grid grid-cols-5 items-end">
+          {left.map(side)}
+
+          {/* Bid & Win — oversized, colorful, live */}
+          <button onClick={() => setTab("arena")} className="tap relative flex flex-col items-center pb-2 group" aria-label="Bid & Win">
+            <span
+              className={`relative -mt-8 w-[62px] h-[62px] rounded-full flex items-center justify-center text-[#331303] border-[3.5px] border-abyss transition-all duration-200 group-active:scale-95
+                ${arenaActive ? "scale-[1.04]" : ""}`}
+              style={{
+                background: "linear-gradient(140deg,#ffd76a 0%,#ffab4a 40%,#ff6b7a 78%,#ff4d5e 100%)",
+                boxShadow: arenaActive
+                  ? "0 12px 30px -8px rgba(255,107,122,0.75), 0 0 0 3px rgba(255,194,75,0.35)"
+                  : "0 12px 28px -10px rgba(255,107,122,0.6)",
+              }}
+            >
+              <IcoGavel size={26} />
+              {/* LIVE badge with hot flame */}
+              <span className="absolute -top-1 -right-2.5 flex items-center gap-[3px] rounded-full bg-abyss border border-coral/70 px-1.5 py-[3px] text-[7.5px] font-black tracking-[0.08em] text-coral shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                <IcoFlame size={9} className="text-gold" />
+                LIVE
+              </span>
+              <span className="absolute inset-0 rounded-full border border-gold/40" style={{ animation: "radar 2.4s ease-out infinite" }} />
+            </span>
+            <span className={`text-[10px] font-extrabold tracking-wide mt-1 transition-colors duration-200 ${arenaActive ? "text-gold" : "text-mut"}`}>Bid &amp; Win</span>
+          </button>
+
+          {right.map(side)}
         </div>
       </div>
     </nav>

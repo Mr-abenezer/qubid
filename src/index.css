@@ -122,6 +122,22 @@ body {
 
 .bar-grow { transform-origin: bottom; animation: barup 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
 
+/* animated holographic border (reward-ad card) */
+@keyframes borderspin { to { transform: rotate(360deg); } }
+.holo-border { position: relative; overflow: hidden; border-radius: 18px; padding: 1.5px; isolation: isolate; }
+.holo-border::before {
+  content: "";
+  position: absolute;
+  inset: -160%;
+  z-index: -1;
+  background: conic-gradient(from 0deg, #ffc24b, #ff6b7a, #54c8ff, #3ddc97, #ffc24b);
+  animation: borderspin 5.5s linear infinite;
+}
+.holo-border > .holo-inner { position: relative; z-index: 1; border-radius: 16.5px; background: linear-gradient(160deg, #12283f 0%, #0b1a2b 70%); height: 100%; }
+
+@keyframes coinbob { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-6px) rotate(8deg); } }
+.anim-coinbob { animation: coinbob 2.6s ease-in-out infinite; }
+
 .chip-q {
   padding: 5px 12px;
   border-radius: 10px;

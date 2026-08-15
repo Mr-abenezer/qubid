@@ -40,16 +40,16 @@ export default function Promote() {
 
   return (
     <div className="px-4 pt-4 pb-2">
-      <h1 className="font-display text-[19px] font-bold anim-rise">Post an Advertisement</h1>
+      <h1 className="font-display text-[19px] font-bold anim-rise">Promote</h1>
       <p className="text-[13px] text-mut mt-1 anim-rise" style={{ animationDelay: "40ms" }}>
-        Your link, shown to every Bid X earner. You only pay for valid, verified clicks.
+        Publish your ad as a task — it goes live on every user's Home screen. You only pay for completed, verified views.
       </p>
 
       {/* pitch strip */}
       <div className="card mt-4 p-4 flex items-center gap-3 border-gold/30 anim-rise" style={{ animationDelay: "80ms" }}>
         <span className="w-11 h-11 rounded-xl bg-gold/14 border border-gold/35 text-gold flex items-center justify-center shrink-0"><IcoMega size={22} /></span>
         <div className="grow text-[12.5px] text-mut leading-relaxed">
-          <b className="text-ink">{cpc} Coins per valid click</b> · min budget {fmt(minB)} Coins
+          <b className="text-ink">{cpc} Coins per completed view</b> · min budget {fmt(minB)} Coins
           <span className="block text-dim">Budget is reserved up-front and refunded if rejected.</span>
         </div>
         <div className="text-right shrink-0">
@@ -60,7 +60,7 @@ export default function Promote() {
 
       {/* form */}
       <div className="card mt-4 p-4 anim-rise" style={{ animationDelay: "120ms" }}>
-        <div className="text-[13px] font-extrabold uppercase tracking-wider text-mut mb-3">New campaign</div>
+        <div className="text-[13px] font-extrabold uppercase tracking-wider text-mut mb-3">New ad / task</div>
         <Field label="Title"><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="Summer sale — 50% off" className="input" /></Field>
         <Field label="Description"><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} maxLength={160} placeholder="One line that sells the click…" className="input resize-none" /></Field>
         <Field label="Destination URL"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-link.com" className="input tnum" /></Field>

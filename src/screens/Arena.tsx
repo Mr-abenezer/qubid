@@ -3,11 +3,12 @@ import confetti from "canvas-confetti";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, type ActionResult } from "../lib/types";
 import { haptic } from "../lib/telegram";
-import { Avatar, Button, Chip, CountUp, IcoCoin, IcoFlame, IcoGavel, IcoInfo, IcoTrophy, Modal, Pill, Ring } from "../components/ui";
+import { Avatar, Button, Chip, CountUp, IcoCoin, IcoFlame, IcoGavel, IcoInfo, IcoMinus, IcoPlus, IcoTrophy, Modal, Pill, Ring } from "../components/ui";
 
 export default function Arena() {
   const { round, user, wallet, api, toast, setWalletBalance, refreshRound, refreshCore } = useApp();
   const [bidding, setBidding] = useState(false);
+  const [amt, setAmt] = useState("");
   const [win, setWin] = useState<{ payout: number; pool: number; number: number } | null>(null);
   const prevStatus = useRef<string | null>(null);
   const prevLeader = useRef<string | null>(null);
@@ -31,6 +32,13 @@ export default function Arena() {
     prevLeader.current = leader;
   }, [round, user, toast, refreshCore]);
 
+  const leader = round?.last_bid ?? null;
+  // each bid must beat the previous one by at least 1 — a new round resets to the starting bid
+  const minBid = leader ? leader.amount + 1 : round?.round.bid_amount ?? 10;
+
+  // keep the input pinned to the minimum whenever the ladder moves
+  useEffect(() => { setAmt(String(minBid)); }, [minBid]);
+
   if (!round || !wallet || !user) {
     return (
       <div className="px-4 pt-4">
@@ -44,28 +52,32 @@ export default function Arena() {
 
   const r = round.round;
   const running = r.status === "running" && (!r.ends_at || new Date(r.ends_at).getTime() > Date.now());
-  const canBid = running && wallet.balance >= r.bid_amount;
-  const leader = round.last_bid;
-  const iLead = leader?.user.id === user.id;
+  const amount = Math.floor(Number(amt) || 0);
+  const tooLow = amount < minBid;
+  const tooHigh = amount > wallet.balance;
+  const canBid = running && !tooLow && !tooHigh && amount > 0;
 
   const bid = async () => {
     if (!canBid || bidding) return;
     setBidding(true);
     haptic("medium");
-    const res: ActionResult = await api.placeBid().catch((e): ActionResult => ({ ok: false, error: String(e) }));
+    const res: ActionResult = await api.placeBid(amount).catch((e): ActionResult => ({ ok: false, error: String(e) }));
     setBidding(false);
-    if (!res.ok) { toast(res.error ?? "Bid rejected", "err"); haptic("error"); return; }
+    if (!res.ok) { toast(res.error ?? "Bid rejected", "err"); haptic("error"); refreshRound(); return; }
     haptic("success");
     if (res.balance !== undefined) setWalletBalance(res.balance);
     refreshRound();
   };
+
+  const nudge = (d: number) => setAmt(String(Math.max(minBid, amount + d)));
+  const quick = [minBid, minBid + 5, minBid + 10];
 
   return (
     <div className="px-4 pt-4 pb-2">
       <div className="flex items-center justify-between anim-rise">
         <div>
           <h1 className="font-display text-[19px] font-bold flex items-center gap-2">Bid &amp; Win <IcoGavel size={19} className="text-gold" /></h1>
-          <p className="text-[13px] text-mut mt-1">Last bidder standing when the clock hits zero takes the pot.</p>
+          <p className="text-[13px] text-mut mt-1">Every bid must beat the last one by at least 1. Last bidder standing takes the pot.</p>
         </div>
         <Chip tone={running ? "mint" : "dim"}>
           <span className="w-1.5 h-1.5 rounded-full bg-current" style={{ animation: "pulsedot 1.4s infinite" }} />
@@ -82,7 +94,7 @@ export default function Arena() {
             <div className="font-display text-[30px] font-bold gold-text glow-gold leading-tight"><CountUp value={r.pool} /></div>
             <div className="text-[12px] text-mut">Coins · round #{r.number}</div>
             <div className="flex gap-1.5 justify-end mt-2.5">
-              <Chip tone="dim"><IcoCoin size={12} /> bid {r.bid_amount}</Chip>
+              <Chip tone="gold"><IcoCoin size={12} /> min bid {fmt(minBid)}</Chip>
               <Chip tone="dim">{r.bid_count} bids</Chip>
             </div>
           </div>
@@ -102,7 +114,7 @@ export default function Arena() {
       </div>
 
       {/* leader */}
-      <div className={`card mt-3 p-4 flex items-center gap-3 anim-rise ${iLead ? "border-gold/50" : ""}`} style={{ animationDelay: "120ms" }}>
+      <div className={`card mt-3 p-4 flex items-center gap-3 anim-rise ${leader && !leader.is_me ? "border-coral/40" : ""} ${leader?.is_me ? "border-gold/50" : ""}`} style={{ animationDelay: "120ms" }}>
         {leader ? (
           <>
             <Avatar name={leader.user.username} photo={leader.user.photo_url} size={42} />
@@ -110,29 +122,61 @@ export default function Arena() {
               <div className="font-extrabold text-[14.5px] truncate">
                 {leader.is_me ? "You" : leader.user.first_name} <span className="text-mut font-semibold">@{leader.user.username}</span>
               </div>
-              <div className="text-[12.5px] text-mut">bid {timeAgo(leader.placed_at)}</div>
+              <div className="text-[12.5px] text-mut tnum">bid {fmt(leader.amount)} Coins · {timeAgo(leader.placed_at)}</div>
             </div>
-            {iLead
+            {leader.is_me
               ? <Chip tone="gold"><IcoTrophy size={12} /> You're leading</Chip>
-              : <Chip tone="coral"><IcoFlame size={12} /> Leading</Chip>}
+              : <Chip tone="coral"><IcoFlame size={12} /> Leading · {fmt(leader.amount)}</Chip>}
           </>
         ) : (
           <>
             <span className="w-10 h-10 rounded-full border border-dashed border-line2 flex items-center justify-center text-dim"><IcoGavel size={18} /></span>
             <div className="grow">
               <div className="font-extrabold text-[14.5px]">No bids yet</div>
-              <div className="text-[12.5px] text-mut">Be first — the clock only starts on the first bid.</div>
+              <div className="text-[12.5px] text-mut tnum">Open the ladder at {fmt(minBid)} Coins — the clock starts with you.</div>
             </div>
           </>
         )}
       </div>
 
+      {/* bid amount picker */}
+      <div className="card mt-3 p-4 anim-rise" style={{ animationDelay: "160ms" }}>
+        <div className="flex items-center justify-between">
+          <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut">Your bid</div>
+          <div className={`text-[11.5px] font-bold tnum ${tooHigh ? "text-coral" : "text-dim"}`}>
+            {tooHigh ? "over your balance" : `balance ${fmt(wallet.balance)}`}
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5 mt-3">
+          <button onClick={() => nudge(-1)} disabled={amount <= minBid} className="tap w-11 h-11 rounded-xl border border-line bg-panel2/70 text-mut flex items-center justify-center disabled:opacity-35 hover:text-ink shrink-0">
+            <IcoMinus size={17} />
+          </button>
+          <div className="relative grow">
+            <input inputMode="numeric" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^\d]/g, ""))} className="input !text-center font-display !text-[22px] !font-bold tnum" />
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-extrabold text-dim">Coins</span>
+          </div>
+          <button onClick={() => nudge(1)} className="tap w-11 h-11 rounded-xl border border-gold/45 bg-gold/12 text-gold flex items-center justify-center hover:brightness-110 shrink-0">
+            <IcoPlus size={17} />
+          </button>
+        </div>
+        <div className="flex gap-2 mt-2.5">
+          {quick.map((v, i) => (
+            <button key={`${v}-${i}`} onClick={() => setAmt(String(Math.min(v, wallet.balance) < minBid ? minBid : v))}
+              className={`tap chip-q flex-1 text-center ${amount === v ? "!text-gold !border-gold/50" : ""}`}>
+              {i === 0 ? `Min ${fmt(v)}` : fmt(v)}
+            </button>
+          ))}
+          <button onClick={() => setAmt(String(wallet.balance))} className={`tap chip-q flex-1 text-center ${amount === wallet.balance ? "!text-gold !border-gold/50" : ""}`}>Max</button>
+        </div>
+        {tooLow && <div className="text-[12px] text-coral font-bold mt-2.5">A bid must be at least <span className="tnum">{fmt(minBid)}</span> — 1 above the last bidder{leader ? ` (@${leader.user.username} bid ${fmt(leader.amount)})` : ""}.</div>}
+      </div>
+
       {/* bid button */}
       <Button full size="lg" className="mt-3 !py-4 text-[16px]" disabled={!canBid} loading={bidding} onClick={bid}>
-        <IcoGavel size={19} /> {running ? `Bid ${r.bid_amount} Coins` : r.status === "completed" ? "Round over" : "Waiting…"}
+        <IcoGavel size={19} /> {running ? (amount > 0 && !tooLow ? `Bid ${fmt(amount)} Coins` : `Bid min ${fmt(minBid)} Coins`) : r.status === "completed" ? "Round over" : "Waiting…"}
       </Button>
-      {running && wallet.balance < r.bid_amount && (
-        <div className="text-center text-[12px] text-coral font-bold mt-2">Not enough Coins — earn more in the Earn tab.</div>
+      {running && wallet.balance < minBid && (
+        <div className="text-center text-[12px] text-coral font-bold mt-2 tnum">Not enough Coins — you need at least {fmt(minBid)} to bid.</div>
       )}
 
       {/* live feed */}
@@ -150,7 +194,7 @@ export default function Arena() {
               <span className="text-mut"> @{b.user.username}</span>
             </div>
             {i === 0 && <Chip tone="gold">latest</Chip>}
-            <span className="text-[13px] font-bold text-coral tnum">−{b.amount}</span>
+            <span className="text-[13px] font-bold text-coral tnum">−{fmt(b.amount)}</span>
             <span className="text-[11px] text-dim w-12 text-right tnum">{timeAgo(b.placed_at)}</span>
           </div>
         ))}
@@ -176,9 +220,10 @@ export default function Arena() {
       <div className="card p-4 mt-5">
         <div className="flex items-center gap-2 text-[13px] font-extrabold uppercase tracking-wider text-mut"><IcoInfo size={15} /> How it works</div>
         <ul className="mt-2.5 space-y-1.5 text-[13px] text-mut leading-relaxed">
-          <li>· Each bid costs <b className="text-ink">{r.bid_amount} Coins</b> and resets the timer to <b className="text-ink">{r.timer_sec}s</b>.</li>
-          <li>· If nobody bids before zero, the <b className="text-ink">last bidder wins {r.winner_pct}%</b> of the pool.</li>
-          <li>· The platform keeps {r.platform_pct}%. The timer and winner are decided <b className="text-ink">server-side</b> — never by your device.</li>
+          <li>· Bidding starts at <b className="text-ink">{r.bid_amount} Coins</b>. Every next bid must be <b className="text-ink">at least 1 Coin above</b> the previous one.</li>
+          <li>· Each bid resets the timer to <b className="text-ink">{r.timer_sec}s</b>. At zero, the last bidder wins <b className="text-ink">{r.winner_pct}%</b> of the pool.</li>
+          <li>· When a round settles, the ladder <b className="text-ink">resets back to {r.bid_amount}</b> for the next round. The platform keeps {r.platform_pct}%.</li>
+          <li>· Timer, ladder and winner are enforced <b className="text-ink">server-side</b> — never by your device.</li>
         </ul>
       </div>
 

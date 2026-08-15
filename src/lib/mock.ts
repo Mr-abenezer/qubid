@@ -9,8 +9,8 @@ import type {
   Withdrawal, WinnerEntry,
 } from "./types";
 
-const LS_KEY = "bidx_mock_v3";
-const EARN_TYPES = ["ad_reward", "task_reward", "click_reward", "bid_winnings"];
+const LS_KEY = "bidx_mock_v4";
+const EARN_TYPES = ["ad_reward", "task_reward", "click_reward", "bid_winnings", "referral_bonus", "referral_commission"];
 const now = () => Date.now();
 const iso = (t: number) => new Date(t).toISOString();
 const day = 86_400_000;
@@ -18,7 +18,7 @@ const day = 86_400_000;
 interface MUser {
   id: string; telegram_id: string; username: string; first_name: string; last_name: string;
   photo_url: string | null; language: string; status: string; balance: number; total_earned: number;
-  created_at: string;
+  created_at: string; referred_by?: string | null;
 }
 interface Db {
   users: Record<string, MUser>;
@@ -36,6 +36,7 @@ interface Db {
   bids: (Bid & { user_id: string })[];
   winners: WinnerEntry[];
   withdrawals: (Withdrawal & { user_id: string })[];
+  referrals: { user_id: string; referred_by: string; completed: number; earned: number }[];
   settings: Settings;
   fees: number;
   seq: number;
@@ -45,7 +46,9 @@ const DEFAULTS: Settings = {
   ad_reward: 5, task_reward: 5, click_price: 5, click_reward: 5,
   min_campaign_budget: 50, bid_amount: 10, bid_timer_sec: 60,
   winner_pct: 85, platform_pct: 15, coin_usdt_rate: 0.0006,
-  min_withdrawal: 300, daily_ad_limit: 20, maintenance_mode: false,
+  min_withdrawal: 300, daily_ad_limit: 20,
+  referral_bonus: 30, referral_commission: 5,
+  maintenance_mode: false,
   admin_telegram_id: "7734124559",
 };
 
@@ -70,6 +73,14 @@ function seed(): Db {
     u7: bot("u7", "5100000007", "lena_hodl", "Lena", "Hodl", 4),
     u8: bot("u8", "5100000008", "max_bids", "Max", "Orlov", 1),
   };
+  // friends who joined through your invite link
+  users.u6.referred_by = "u-me";
+  users.u7.referred_by = "u-me";
+  users.u8.referred_by = "u-me";
+  try {
+    const sp = new URLSearchParams(location.search).get("startapp");
+    if (sp && users[sp] && sp !== "u-me") me.referred_by = sp;
+  } catch { /* noop */ }
 
   const ads: Db["ads"] = [
     { id: "ad-1", source: "ad", title: "SolanaStake — Earn 7% APY", description: "Stake SOL with non-custodial security. Instant rewards, zero lock-up for flexible pools.", image_url: null, url: "https://example.com/solanastake", reward: 5, required_seconds: 8, per_user_limit: 2, my_completions: 0, ends_at: null, hue: 152, status: "active" },
@@ -90,6 +101,11 @@ function seed(): Db {
     id: n, type, amount, balance_after: 0, note, created_at: iso(now() - hoursAgo * 3_600_000),
   });
   const myTxs: Tx[] = [
+    mk(26, 1, "referral_commission", 5, "@max_bids completed a task"),
+    mk(25, 6, "referral_commission", 5, "@lena_hodl completed a task"),
+    mk(24, 22, "referral_bonus", 30, "@max_bids joined with your link"),
+    mk(23, 26, "referral_commission", 5, "@token_tim completed a task"),
+    mk(22, 96, "referral_bonus", 30, "@lena_hodl joined with your link"),
     mk(21, 2, "ad_reward", 5, "SolanaStake — Earn 7% APY"),
     mk(20, 5, "bid_payment", -10, "Bid & Win round #36"),
     mk(19, 6, "bid_payment", -10, "Bid & Win round #36"),
@@ -99,7 +115,7 @@ function seed(): Db {
     mk(15, 30, "bid_payment", -10, "Bid & Win round #35"),
     mk(14, 50, "ad_reward", 5, "CryptoSignals Pro — Free week"),
     mk(13, 54, "ad_reward", 5, "MetaPunks NFT drop — Whitelist"),
-    mk(12, 74, "withdrawal", -300, "Withdrawal to TRC20 ••••7f3a"),
+    mk(12, 74, "withdrawal", -300, "Withdrawal to BEP20 ••••A063"),
     mk(11, 74, "campaign_deposit", -100, "Campaign budget — Mega Airdrop"),
     mk(10, 98, "bid_payment", -10, "Bid & Win round #33"),
     mk(9, 100, "bid_payment", -10, "Bid & Win round #33"),
@@ -116,12 +132,13 @@ function seed(): Db {
   const t0 = now();
   const bids: Db["bids"] = [];
   const botIds = ["u1", "u3", "u2", "u5", "u4", "u7", "u6", "u3", "u1", "u8", "u2", "u5"];
+  // every bid must beat the previous one by at least 1 — seeded bids escalate 10 → 21
   botIds.forEach((uid, i) => {
     const u = users[uid];
     bids.unshift({
       id: 100 + i, user_id: uid,
       user: { id: uid, username: u.username, first_name: u.first_name, photo_url: null },
-      amount: 10, placed_at: iso(t0 - (botIds.length - i) * 47_000), is_me: false,
+      amount: 10 + i, placed_at: iso(t0 - (botIds.length - i) * 47_000), is_me: false,
     });
   });
 
@@ -135,7 +152,7 @@ function seed(): Db {
     clicks: {},
     round: {
       id: "r-37", number: 37, bid_amount: 10, timer_sec: 60, winner_pct: 85, platform_pct: 15,
-      pool: 120, bid_count: 12, status: "running", ends_at: iso(t0 + 44_000),
+      pool: 186, bid_count: 12, status: "running", ends_at: iso(t0 + 44_000),
       winner: null, payout: null,
     },
     roundNextAt: null, roundStartedAt: t0 - 12 * 60_000,
@@ -146,7 +163,12 @@ function seed(): Db {
       { user: { id: "u-me", username: "smart_earner", first_name: "Alex" }, payout: 289, pool: 340, at: iso(now() - 2 * day), round: 30 },
     ],
     withdrawals: [
-      { id: "w-1", user_id: "u-me", coins: 300, usdt: 0.18, address: "TQrfqvYzdUvL7t1XyB3cXk9m2pN5e7f3a", network: "TRC20", status: "completed", created_at: iso(now() - 3 * day) },
+      { id: "w-1", user_id: "u-me", coins: 300, usdt: 0.18, address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", network: "BEP20", status: "completed", created_at: iso(now() - 3 * day) },
+    ],
+    referrals: [
+      { user_id: "u6", referred_by: "u-me", completed: 12, earned: 90 },
+      { user_id: "u7", referred_by: "u-me", completed: 7, earned: 65 },
+      { user_id: "u8", referred_by: "u-me", completed: 3, earned: 45 },
     ],
     settings: { ...DEFAULTS },
     fees: 1350, seq: 1000,
@@ -186,6 +208,17 @@ export function createMockBackend(): Backend {
     return tx;
   };
 
+  // Referral program: when a user completes a task/ad, their inviter earns a
+  // commission and the referral counter ticks up.
+  const commission = (actorId: string, note: string) => {
+    const rid = db.users[actorId]?.referred_by;
+    const c = db.settings.referral_commission;
+    if (!rid || !db.users[rid] || c <= 0) return;
+    credit(rid, c, "referral_commission", note);
+    const row = db.referrals.find((x) => x.user_id === actorId && x.referred_by === rid);
+    if (row) { row.completed += 1; row.earned += c; }
+  };
+
   const finalize = () => {
     const r = db.round;
     if (r.status !== "running" || !r.ends_at || now() < new Date(r.ends_at).getTime()) return;
@@ -204,21 +237,30 @@ export function createMockBackend(): Backend {
     emit();
   };
 
-  const pushBid = (userId: string) => {
+  // A bid must beat the previous bid by at least 1 Coin. When a round ends the
+  // ladder resets to the round's starting bid (10 by default).
+  const minBidNow = () => {
+    const last = db.bids[db.bids.length - 1];
+    return last ? last.amount + 1 : db.round.bid_amount;
+  };
+
+  const pushBid = (userId: string, amount?: number) => {
     const u = db.users[userId];
     const r = db.round;
     if (r.status !== "running") return false;
     if (r.ends_at && now() >= new Date(r.ends_at).getTime()) { finalize(); return false; }
-    if (u.balance < r.bid_amount) return false;
-    credit(userId, -r.bid_amount, "bid_payment", `Bid & Win round #${r.number}`);
+    const min = minBidNow();
+    const amt = Math.floor(amount ?? min);
+    if (amt < min || u.balance < amt) return false;
+    credit(userId, -amt, "bid_payment", `Bid & Win round #${r.number}`);
     const bid: Bid & { user_id: string } = {
       id: ++db.seq, user_id: userId,
       user: { id: userId, username: u.username, first_name: u.first_name, photo_url: null },
-      amount: r.bid_amount, placed_at: iso(now()), is_me: userId === db.me,
+      amount: amt, placed_at: iso(now()), is_me: userId === db.me,
     };
     db.bids.push(bid);
     db.bids = db.bids.slice(-60);
-    r.pool += r.bid_amount;
+    r.pool += amt;
     r.bid_count += 1;
     r.ends_at = iso(now() + r.timer_sec * 1000);
     emit();
@@ -239,7 +281,8 @@ export function createMockBackend(): Backend {
     emit();
   };
 
-  // 1s heartbeat: countdown, bot activity, settlements
+  // 1s heartbeat: countdown, bot activity, settlements, referral activity
+  let lastRefTick = now();
   setInterval(() => {
     const r = db.round;
     if (r.status === "running") {
@@ -248,14 +291,33 @@ export function createMockBackend(): Backend {
       const last = db.bids[db.bids.length - 1];
       const meLeading = last?.user_id === db.me;
       if (!r.ends_at) {
-        if (now() - db.roundStartedAt > 6_000 && Math.random() < 0.35) pushBid(botIds[Math.floor(Math.random() * botIds.length)]);
+        if (now() - db.roundStartedAt > 6_000 && Math.random() < 0.35) {
+          pushBid(botIds[Math.floor(Math.random() * botIds.length)], minBidNow() + Math.floor(Math.random() * 4));
+        }
       } else if (r.pool < 1500 && r.bid_count < 110) {
         const p = meLeading ? 0.16 : 0.055;
-        if (Math.random() < p) pushBid(botIds[Math.floor(Math.random() * botIds.length)]);
+        if (Math.random() < p) pushBid(botIds[Math.floor(Math.random() * botIds.length)], minBidNow() + Math.floor(Math.random() * 4));
       }
     } else if (r.status === "completed" && db.roundNextAt && now() >= db.roundNextAt) {
       newRound();
     }
+
+    // referred friends keep completing tasks — you earn commissions while away
+    if (now() - lastRefTick > 15_000 && Math.random() < 0.55) {
+      lastRefTick = now();
+      const mine = db.referrals.filter((x) => x.referred_by === db.me);
+      if (mine.length) {
+        const row = mine[Math.floor(Math.random() * mine.length)];
+        const c = db.settings.referral_commission;
+        if (c > 0) {
+          row.completed += 1;
+          row.earned += c;
+          const friend = db.users[row.user_id];
+          credit(db.me, c, "referral_commission", `@${friend?.username ?? "friend"} completed a task`);
+        }
+      }
+    }
+
     listeners.forEach((cb) => cb());
   }, 1000);
 
@@ -326,8 +388,9 @@ export function createMockBackend(): Backend {
         if (c.spent >= c.budget) c.status = "completed";
         (db.clicks[c.id] ??= []).push(db.me);
         const tx = credit(db.me, db.settings.click_reward, "click_reward", c.title);
+        commission(db.me, `${c.title} — friend activity`);
         emit();
-        return ok({ reward: tx.amount, balance: u.balance });
+        return ok({ reward: tx.amount, balance: meU().balance });
       }
       const a = db.ads.find((x) => x.id === adId);
       if (!a || a.status !== "active") return fail("Ad unavailable");
@@ -338,8 +401,9 @@ export function createMockBackend(): Backend {
       if (todayCount >= db.settings.daily_ad_limit) return fail("Daily ad limit reached");
       (db.adDone[a.id] ??= {})[db.me] = done + 1;
       const tx = credit(db.me, a.reward, "ad_reward", a.title);
+      commission(db.me, `${a.title} — friend activity`);
       emit();
-      return ok({ reward: tx.amount, balance: u.balance });
+      return ok({ reward: tx.amount, balance: meU().balance });
     },
 
     async listTasks() {
@@ -357,11 +421,11 @@ export function createMockBackend(): Backend {
       if (db.subs.some((s) => s.task_id === taskId && s.user_id === db.me)) return fail("Already submitted");
       const u = meU();
       if (!t.requires_proof) {
-        db.subs.unshift({ id: `s-${++db.seq}`, user_id: db.me, task_id: taskId, user: { id: u.id, username: u.username, first_name: u.first_name }, task: { id: t.id, title: t.title, reward: t.reward }, proof: "auto-verified", status: "approved", created_at: iso(now()) });
-        const tx = credit(db.me, t.reward, "task_reward", t.title);
-        emit();
-        return { ...ok({ reward: tx.amount, balance: u.balance }), auto: true };
-      }
+      db.subs.unshift({ id: `s-${++db.seq}`, user_id: db.me, task_id: taskId, user: { id: u.id, username: u.username, first_name: u.first_name }, task: { id: t.id, title: t.title, reward: t.reward }, proof: "auto-verified", status: "approved", created_at: iso(now()) });
+      const tx = credit(db.me, t.reward, "task_reward", t.title);
+      commission(db.me, `${t.title} — friend activity`);
+      emit();
+      return { ...ok({ reward: tx.amount, balance: meU().balance }), auto: true };      }
       db.subs.unshift({ id: `s-${++db.seq}`, user_id: db.me, task_id: taskId, user: { id: u.id, username: u.username, first_name: u.first_name }, task: { id: t.id, title: t.title, reward: t.reward }, proof, status: "pending", created_at: iso(now()) });
       emit();
       return ok();
@@ -390,12 +454,15 @@ export function createMockBackend(): Backend {
     },
 
     async getRound() { await d(180); return snap(); },
-    async placeBid() {
+    async placeBid(amount) {
       await d(300);
       const u = meU();
       if (db.round.status !== "running") return fail("Round is not running");
-      if (u.balance < db.round.bid_amount) return fail("Not enough Coins");
-      pushBid(db.me);
+      const min = minBidNow();
+      const amt = Math.floor(Number(amount) || 0);
+      if (amt < min) return fail(`Your bid must be at least ${min} Coins — always 1 above the last bidder`);
+      if (u.balance < amt) return fail("Not enough Coins");
+      pushBid(db.me, amt);
       return ok({ balance: meU().balance });
     },
     async tryFinalize() { finalize(); },
@@ -416,6 +483,29 @@ export function createMockBackend(): Backend {
     },
 
     async listMyWithdrawals() { await d(); return db.withdrawals.filter((w) => w.user_id === db.me); },
+
+    async getReferralStats() {
+      await d();
+      const rows = db.referrals
+        .filter((x) => x.referred_by === db.me)
+        .map((x) => {
+          const u = db.users[x.user_id];
+          return {
+            id: `rf-${x.user_id}`,
+            user: { id: u.id, telegram_id: u.telegram_id, username: u.username, first_name: u.first_name, photo_url: u.photo_url },
+            joined_at: u.created_at,
+            completed: x.completed,
+            earned: x.earned,
+          };
+        })
+        .sort((a, b) => b.joined_at.localeCompare(a.joined_at));
+      return {
+        code: meU().telegram_id,
+        count: rows.length,
+        earned: rows.reduce((s, r) => s + r.earned, 0),
+        referrals: rows,
+      };
+    },
 
     // ── admin ────────────────────────────────────────────────────────────
     async adminStats() {
@@ -512,7 +602,10 @@ export function createMockBackend(): Backend {
       const s = db.subs.find((x) => x.id === id);
       if (!s || s.status !== "pending") return fail("Submission already reviewed");
       s.status = approve ? "approved" : "rejected";
-      if (approve) credit(s.user_id, s.task.reward, "task_reward", s.task.title);
+      if (approve) {
+        credit(s.user_id, s.task.reward, "task_reward", s.task.title);
+        commission(s.user_id, `${s.task.title} — friend activity`);
+      }
       emit(); return ok();
     },
 

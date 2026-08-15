@@ -109,7 +109,7 @@ export function createSupabaseBackend(initDataStr: string): Backend {
     },
 
     async getRound() { return rpc(sb, "get_round"); },
-    async placeBid() { return A(sb.rpc("place_bid" as never)); },
+    async placeBid(amount) { return A(sb.rpc("place_bid" as never, { p_amount: amount } as never)); },
     async tryFinalize() { await sb.rpc("try_finalize_round" as never); },
 
     subscribeRound(cb) {
@@ -128,6 +128,16 @@ export function createSupabaseBackend(initDataStr: string): Backend {
       return A(sb.rpc("request_withdrawal" as never, { p_coins: coins, p_address: address, p_network: network } as never));
     },
     async listMyWithdrawals() { return rpc(sb, "list_my_withdrawals"); },
+
+    async getReferralStats() {
+      // Server RPC ships in supabase/migrations/002_referrals.sql — until it is
+      // applied, fall back to an empty program so the screen still renders.
+      try {
+        return await rpc(sb, "referral_stats");
+      } catch {
+        return { code: "", count: 0, earned: 0, referrals: [] };
+      }
+    },
 
     async adminStats() { return rpc(sb, "admin_stats"); },
     async adminUsers(q = "") { return rpc(sb, "admin_users", { p_q: q }); },

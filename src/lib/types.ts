@@ -32,6 +32,8 @@ export interface Settings {
   coin_usdt_rate: number; // 1 Coin = X USDT (default 0.0006)
   min_withdrawal: number;
   daily_ad_limit: number;
+  referral_bonus: number;      // Coins granted when an invited friend joins
+  referral_commission: number; // Coins granted per task/ad a referred friend completes
   maintenance_mode: boolean;
   admin_telegram_id?: string;
 }
@@ -149,6 +151,21 @@ export interface RoundState {
   server_now: string;
 }
 
+export interface Referral {
+  id: string;
+  user: MiniUser;
+  joined_at: string;
+  completed: number; // tasks/ads this friend has completed
+  earned: number;    // Coins this friend has earned you
+}
+
+export interface ReferralStats {
+  code: string; // referral code (Telegram ID)
+  count: number;
+  earned: number;
+  referrals: Referral[];
+}
+
 export interface Submission {
   id: string;
   proof: string;
@@ -198,9 +215,11 @@ export interface Backend {
   }): Promise<ActionResult>;
   // bid & win
   getRound(): Promise<RoundState>;
-  placeBid(): Promise<ActionResult>;
+  placeBid(amount: number): Promise<ActionResult>;
   tryFinalize(): Promise<void>;
   subscribeRound(cb: () => void): () => void;
+  // referral program
+  getReferralStats(): Promise<ReferralStats>;
   // wallet
   listTransactions(limit?: number): Promise<Tx[]>;
   requestWithdrawal(coins: number, address: string, network: string): Promise<ActionResult>;
@@ -261,6 +280,8 @@ export const TX_META: Record<string, { label: string; tone: "mint" | "coral" | "
   withdrawal: { label: "Withdrawal", tone: "coral" },
   withdrawal_refund: { label: "Withdrawal refund", tone: "mint" },
   admin_adjust: { label: "Admin adjustment", tone: "sky" },
+  referral_bonus: { label: "Invite bonus", tone: "gold" },
+  referral_commission: { label: "Friend activity bonus", tone: "mint" },
 };
 
 export const hueOf = (s: string) => {

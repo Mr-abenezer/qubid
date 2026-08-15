@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { Ad, Backend, Bootstrap, RoundState, Settings, Task, UserProfile, Wallet } from "../lib/types";
 import { haptic } from "../lib/telegram";
 
-export type Tab = "home" | "earn" | "arena" | "promote" | "wallet";
+export type Tab = "home" | "promote" | "arena" | "invite" | "wallet";
 export interface Toast { id: number; msg: string; kind: "ok" | "err" | "info" }
 
 interface Ctx {
@@ -107,6 +107,15 @@ export function AppProvider({ backend, onProfile, onAdmin, children }: {
     const unsub = backend.subscribeRound(() => refreshRound());
     return unsub;
   }, [backend, refreshRound]);
+
+  // In the local preview the simulated server keeps moving (bots bid, referred
+  // friends complete tasks and earn you commissions) — poll the core state so
+  // balance changes surface without a manual refresh.
+  useEffect(() => {
+    if (backend.mode !== "mock") return;
+    const iv = setInterval(() => { refreshCore(); }, 7000);
+    return () => clearInterval(iv);
+  }, [backend, refreshCore]);
 
   return (
     <AppCtx.Provider value={{

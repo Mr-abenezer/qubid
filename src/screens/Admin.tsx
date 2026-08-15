@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, usdtOf, type AdminStats, type AdminUserRow, type Ad, type BidRound, type Campaign, type MiniUser, type Settings, type Submission, type Task, type Tx, type Withdrawal } from "../lib/types";
 import { haptic } from "../lib/telegram";
-import { Avatar, Bar, Button, Chip, Empty, Field, IcoBan, IcoCheck, IcoChev, IcoCoin, IcoDoc, IcoGear, IcoGavel, IcoMega, IcoPause, IcoPlay, IcoPlus, IcoRefresh, IcoSearch, IcoShield, IcoStop, IcoUsers, IcoWallet, IcoX, Modal, Pill, Spinner, Toggle } from "../components/ui";
+import { Avatar, Bar, Button, Chip, CopyBtn, Empty, Field, IcoBan, IcoCheck, IcoChev, IcoCoin, IcoDoc, IcoGear, IcoGavel, IcoMega, IcoPause, IcoPlay, IcoPlus, IcoRefresh, IcoSearch, IcoShield, IcoStop, IcoUsers, IcoWallet, IcoX, Modal, Pill, Spinner, Toggle } from "../components/ui";
 import { TxRow } from "./Wallet";
 
 type ATab = "overview" | "users" | "content" | "campaigns" | "rounds" | "withdrawals" | "settings";
@@ -487,10 +487,10 @@ function Rounds() {
       <div className="card p-4">
         <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">Start a custom round</div>
         <div className="grid grid-cols-2 gap-2.5">
-          <Field label="Bid amount"><input inputMode="numeric" className="input tnum" value={String(amount)} onChange={(e) => setAmount(Number(e.target.value) || 1)} /></Field>
+          <Field label="Starting bid (min)"><input inputMode="numeric" className="input tnum" value={String(amount)} onChange={(e) => setAmount(Number(e.target.value) || 1)} /></Field>
           <Field label="Timer (sec)"><input inputMode="numeric" className="input tnum" value={String(timer)} onChange={(e) => setTimer(Number(e.target.value) || 10)} /></Field>
         </div>
-        <Button full onClick={async () => { const x = await api.adminRoundAction("start", { bid_amount: amount, timer_sec: timer }); if (x.ok) { toast(`Round started — ${amount} C bids, ${timer}s timer`, "ok"); load(); } }}>
+        <Button full onClick={async () => { const x = await api.adminRoundAction("start", { bid_amount: amount, timer_sec: timer }); if (x.ok) { toast(`Round started — opens at ${amount} C, ${timer}s timer`, "ok"); load(); } }}>
           <IcoPlay size={16} /> Start new round
         </Button>
       </div>
@@ -518,9 +518,14 @@ function Withdrawals() {
             <Avatar name={w.user.username} size={32} />
             <div className="grow min-w-0">
               <div className="text-[13.5px] font-extrabold truncate">@{w.user.username}</div>
-              <div className="text-[11px] text-dim tnum">{fmt(w.coins)} C → {w.usdt} USDT · {w.network} ••••{w.address.slice(-6)}</div>
+              <div className="text-[11px] text-dim tnum">{fmt(w.coins)} C → {w.usdt} USDT · {w.network} · {timeAgo(w.created_at)}</div>
             </div>
             <Pill status={w.status} />
+          </div>
+          {/* full payout address — always visible, one tap to copy */}
+          <div className="mt-2.5 rounded-xl border border-line bg-abyss/60 p-2.5 flex items-center gap-2.5">
+            <span className="grow text-[11.5px] font-semibold text-sky tnum break-all leading-relaxed select-all">{w.address}</span>
+            <CopyBtn text={w.address} />
           </div>
           <div className="flex gap-2 mt-2.5 flex-wrap">
             {w.status === "pending" && <><Button variant="mint" size="sm" onClick={() => set(w.id, "approved")}><IcoCheck size={14} /> Approve</Button><Button variant="danger" size="sm" onClick={() => set(w.id, "rejected")}><IcoX size={14} /> Reject</Button></>}
@@ -539,7 +544,12 @@ function SettingsTab() {
   const { api, toast, refreshCore } = useApp();
   const [s, setS] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.adminGetSettings().then(setS).catch(() => setS(null)); }, [api]);
+  useEffect(() => {
+    // defaults for keys added in migration 002 (older servers may not have them yet)
+    api.adminGetSettings()
+      .then((x) => setS({ referral_bonus: 30, referral_commission: 5, ...(x as Partial<Settings>) } as Settings))
+      .catch(() => setS(null));
+  }, [api]);
   if (!s) return <div className="skeleton h-[300px] rounded-2xl" />;
   const num = (k: keyof Settings, v: string) => setS({ ...s, [k]: Number(v) || 0 });
   const F = ({ k, label, step }: { k: keyof Settings; label: string; step?: string }) => (
@@ -561,9 +571,19 @@ function SettingsTab() {
         </div>
       </div>
       <div className="card p-4 mt-3">
+        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">Referral program</div>
+        <div className="grid grid-cols-2 gap-x-2.5">
+          <F k="referral_bonus" label="Invite bonus (Coins)" />
+          <F k="referral_commission" label="Per-task commission" />
+        </div>
+        <div className="text-[11.5px] text-dim leading-relaxed mt-1">
+          Inviters receive the bonus when a friend joins, plus the commission on every task/ad the friend completes. Withdrawals are paid in <b className="text-mut">USDT · BEP20</b> only.
+        </div>
+      </div>
+      <div className="card p-4 mt-3">
         <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">Bid &amp; Win</div>
         <div className="grid grid-cols-2 gap-x-2.5">
-          <F k="bid_amount" label="Bid amount (Coins)" />
+          <F k="bid_amount" label="Starting bid (Coins)" />
           <F k="bid_timer_sec" label="Timer (seconds)" />
           <F k="winner_pct" label="Winner %" />
           <F k="platform_pct" label="Platform %" />
