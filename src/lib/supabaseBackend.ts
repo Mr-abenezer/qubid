@@ -47,9 +47,11 @@ async function ensureSession(sb: SupabaseClient, initDataStr: string) {
     throw new Error(`telegram-login failed (${res.status})${hint} ${detail.slice(0, 160)}`.trim());
   }
 
-  const { email, token_hash } = await res.json();
-  if (!email || !token_hash) throw new Error("telegram-login returned no session token.");
-  const { error } = await sb.auth.verifyOtp({ email, token_hash, type: "magiclink" });
+  const { token_hash } = await res.json();
+  if (!token_hash) throw new Error("telegram-login returned no session token.");
+  // GoTrue requires ONLY token_hash + type here — including the email
+  // makes it reject the request with "Only the token_hash and type should be provided".
+  const { error } = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
   if (error) throw new Error(`Session exchange failed: ${error.message}`);
 }
 
