@@ -433,7 +433,7 @@ function Campaigns() {
           </div>
         </div>
       ))}
-      {rows?.length === 0 && <Empty icon={<IcoMega size={20} />} title="No campaigns" sub="User campaigns will appear here for approval." />}
+      {rows?.length === 0 && <Empty icon={<IcoMega size={20} />} title="No campaigns" sub="Campaigns publish themselves to Home instantly — pause, refund or edit them here." />}
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title="Edit campaign" tall>
         {edit && (

@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, type ActionResult, type Campaign } from "../lib/types";
 import { haptic } from "../lib/telegram";
-import { Bar, Button, Chip, Empty, Field, IcoCoin, IcoEye, IcoLink, IcoMega, Pill } from "../components/ui";
+import { Bar, Button, Chip, Empty, Field, IcoBolt, IcoCoin, IcoEye, IcoLink, IcoMega, Pill } from "../components/ui";
 
 export default function Promote() {
-  const { wallet, settings, api, toast, setWalletBalance, refreshCore } = useApp();
+  const { wallet, settings, api, toast, setWalletBalance, refreshCore, refreshAds } = useApp();
   const [mine, setMine] = useState<Campaign[]>([]);
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
@@ -20,37 +20,44 @@ export default function Promote() {
 
   if (!wallet || !settings) return <div className="px-4 pt-4"><div className="skeleton h-[110px] rounded-2xl" /><div className="skeleton h-[300px] mt-4 rounded-2xl" /></div>;
 
-  const cpc = settings.click_price;
+  const cpc = Math.max(1, settings.click_price);
   const minB = settings.min_campaign_budget;
+  const maxBudget = Math.max(minB, Math.min(2000, Math.floor(wallet.balance)));
   const clicks = Math.floor(budget / cpc);
   const valid = title.trim().length >= 3 && /^https?:\/\//.test(url.trim()) && budget >= minB && budget <= wallet.balance;
+
+  // keep the budget state inside what the wallet can actually cover, so the
+  // submit button never gets stuck disabled after spending Coins elsewhere
+  useEffect(() => {
+    setBudget((b) => Math.min(Math.max(minB, b), maxBudget));
+  }, [minB, maxBudget]);
 
   const submit = async () => {
     if (!valid) { toast(budget > wallet.balance ? "Budget exceeds your balance" : "Check title, link and budget", "err"); haptic("error"); return; }
     setBusy(true);
-    const res: ActionResult = await api.createCampaign({ title: title.trim(), description: desc.trim(), url: url.trim(), image_url: image.trim(), budget, days }).catch((e): ActionResult => ({ ok: false, error: String(e) }));
+    const res: ActionResult = await api.createCampaign({ title: title.trim(), description: desc.trim(), url: url.trim(), image_url: image.trim(), budget, days }).catch((e): ActionResult => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
     setBusy(false);
-    if (!res.ok) { toast(res.error ?? "Could not create campaign", "err"); return; }
+    if (!res.ok) { toast(res.error ?? "Could not create campaign", "err"); haptic("error"); return; }
     haptic("success");
-    toast("Campaign submitted — pending admin approval", "ok");
+    toast("Campaign is live — it's on everyone's Home now", "ok");
     if (res.balance !== undefined) setWalletBalance(res.balance);
-    setTitle(""); setDesc(""); setUrl(""); setImage(""); setBudget(Math.max(minB, 100));
-    refreshCore(); load();
+    setTitle(""); setDesc(""); setUrl(""); setImage(""); setBudget(Math.min(Math.max(minB, 100), maxBudget));
+    refreshCore(); refreshAds(); load();
   };
 
   return (
     <div className="px-4 pt-4 pb-2">
       <h1 className="font-display text-[19px] font-bold anim-rise">Promote</h1>
       <p className="text-[13px] text-mut mt-1 anim-rise" style={{ animationDelay: "40ms" }}>
-        Publish your ad as a task — it goes live on every user's Home screen. You only pay for completed, verified views.
+        Publish your ad — it goes <b className="text-ink">live on every user's Home screen instantly</b>. No approval, no waiting. You only pay for completed, verified views.
       </p>
 
       {/* pitch strip */}
       <div className="card mt-4 p-4 flex items-center gap-3 border-gold/30 anim-rise" style={{ animationDelay: "80ms" }}>
         <span className="w-11 h-11 rounded-xl bg-gold/14 border border-gold/35 text-gold flex items-center justify-center shrink-0"><IcoMega size={22} /></span>
         <div className="grow text-[12.5px] text-mut leading-relaxed">
-          <b className="text-ink">{cpc} Coins per completed view</b> · min budget {fmt(minB)} Coins
-          <span className="block text-dim">Budget is reserved up-front and refunded if rejected.</span>
+          <b className="text-ink">Pay only for completed views</b> · min budget {fmt(minB)} Coins
+          <span className="block text-dim">Budget is reserved up-front — unspent Coins can be refunded.</span>
         </div>
         <div className="text-right shrink-0">
           <div className="text-[10.5px] font-bold uppercase tracking-wider text-dim">Balance</div>
@@ -66,11 +73,11 @@ export default function Promote() {
         <Field label="Destination URL"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-link.com" className="input tnum" /></Field>
         <Field label="Image URL" hint="optional"><input value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://…/banner.png" className="input" /></Field>
 
-        <Field label={`Budget — ${fmt(budget)} Coins`} hint={`min ${fmt(minB)}`}>
-          <input type="range" min={minB} max={Math.max(minB, Math.min(2000, wallet.balance))} step={10} value={Math.min(budget, Math.max(minB, wallet.balance))}
-            onChange={(e) => setBudget(Number(e.target.value))} className="w-full accent-[#ffc24b]" />
+        <Field label={`Budget — ${fmt(Math.min(budget, maxBudget))} Coins`} hint={`min ${fmt(minB)}`}>
+          <input type="range" min={minB} max={maxBudget} step={5} value={Math.min(budget, maxBudget)}
+            onChange={(e) => setBudget(Math.min(Number(e.target.value), maxBudget))} className="w-full accent-[#ffc24b]" />
           <div className="flex justify-between text-[11.5px] text-dim tnum mt-1">
-            <span>{fmt(minB)}</span><span>{fmt(Math.max(minB, Math.min(2000, wallet.balance)))}</span>
+            <span>{fmt(minB)}</span><span>{fmt(maxBudget)}</span>
           </div>
         </Field>
         <Field label="Duration">
@@ -89,15 +96,19 @@ export default function Promote() {
         </div>
 
         <Button full size="lg" className="mt-4" loading={busy} disabled={!valid} onClick={submit}>
-          <IcoCoin size={18} /> Reserve {fmt(budget)} Coins & submit
+          <IcoBolt size={18} /> Reserve {fmt(Math.min(budget, maxBudget))} Coins & go live
         </Button>
-        {!valid && budget > wallet.balance && <div className="text-center text-[12px] text-coral font-bold mt-2">Budget exceeds your balance of {fmt(wallet.balance)} Coins.</div>}
+        {valid
+          ? <div className="text-center text-[12px] text-mint font-bold mt-2 flex items-center justify-center gap-1.5"><IcoBolt size={12} /> Publishes instantly — no approval needed</div>
+          : budget > wallet.balance
+            ? <div className="text-center text-[12px] text-coral font-bold mt-2">Budget exceeds your balance of {fmt(wallet.balance)} Coins.</div>
+            : null}
       </div>
 
       {/* my campaigns */}
       <h2 className="font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-mut mt-6 mb-2.5">Your campaigns</h2>
       {mine.length === 0 ? (
-        <Empty icon={<IcoLink size={20} />} title="No campaigns yet" sub="Launch your first ad — approval usually takes under an hour." />
+        <Empty icon={<IcoLink size={20} />} title="No campaigns yet" sub="Launch your first ad — it goes live on Home the moment you publish." />
       ) : (
         <div className="space-y-3">
           {mine.map((c, i) => (
@@ -105,7 +116,7 @@ export default function Promote() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="font-extrabold text-[14.5px] leading-tight">{c.title}</div>
-                  <div className="text-[11.5px] text-dim mt-0.5">created {timeAgo(c.created_at)} · {c.cpc} Coins/click</div>
+                  <div className="text-[11.5px] text-dim mt-0.5">created {timeAgo(c.created_at)}</div>
                 </div>
                 <Pill status={c.status} />
               </div>

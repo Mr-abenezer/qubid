@@ -9,7 +9,7 @@ import type {
   Withdrawal, WinnerEntry,
 } from "./types";
 
-const LS_KEY = "bidx_mock_v4";
+const LS_KEY = "bidx_mock_v5";
 const EARN_TYPES = ["ad_reward", "task_reward", "click_reward", "bid_winnings", "referral_bonus", "referral_commission"];
 const now = () => Date.now();
 const iso = (t: number) => new Date(t).toISOString();
@@ -43,7 +43,7 @@ interface Db {
 }
 
 const DEFAULTS: Settings = {
-  ad_reward: 5, task_reward: 5, click_price: 5, click_reward: 5,
+  ad_reward: 5, task_reward: 5, click_price: 7, click_reward: 5,
   min_campaign_budget: 50, bid_amount: 10, bid_timer_sec: 60,
   winner_pct: 85, platform_pct: 15, coin_usdt_rate: 0.0006,
   min_withdrawal: 300, daily_ad_limit: 20,
@@ -146,8 +146,8 @@ function seed(): Db {
     users, me: "u-me", txs: { "u-me": myTxs },
     ads, adDone: {}, tasks, subs: [],
     campaigns: [
-      { id: "c-1", user_id: "u-me", title: "Mega Airdrop — claim now", description: "Community airdrop for early holders.", url: "https://example.com/mega", image_url: null, budget: 100, cpc: 5, clicks: 0, max_clicks: 20, spent: 0, status: "pending", created_at: iso(now() - 2 * day), ends_at: iso(now() + 12 * day) },
-      { id: "c-2", user_id: "u3", title: "AirdropAlert — Claim $AIR", description: "User campaign: verify your wallet and claim the $AIR community airdrop.", url: "https://example.com/airdrop", image_url: null, budget: 250, cpc: 5, clicks: 17, max_clicks: 50, spent: 85, status: "active", created_at: iso(now() - 6 * day), ends_at: iso(now() + 9 * day) },
+      { id: "c-1", user_id: "u-me", title: "Mega Airdrop — claim now", description: "Community airdrop for early holders.", url: "https://example.com/mega", image_url: null, budget: 100, cpc: 7, clicks: 0, max_clicks: 14, spent: 0, status: "active", created_at: iso(now() - 2 * day), ends_at: iso(now() + 12 * day) },
+      { id: "c-2", user_id: "u3", title: "AirdropAlert — Claim $AIR", description: "User campaign: verify your wallet and claim the $AIR community airdrop.", url: "https://example.com/airdrop", image_url: null, budget: 250, cpc: 7, clicks: 17, max_clicks: 35, spent: 119, status: "active", created_at: iso(now() - 6 * day), ends_at: iso(now() + 9 * day) },
     ],
     clicks: {},
     round: {
@@ -451,10 +451,11 @@ export function createMockBackend(): Backend {
       if (input.budget < s.min_campaign_budget) return fail(`Minimum budget is ${s.min_campaign_budget} Coins`);
       if (u.balance < input.budget) return fail("Insufficient balance");
       credit(db.me, -input.budget, "campaign_deposit", `Campaign budget — ${input.title}`);
+      // No approval gate — the campaign is live on every Home screen immediately.
       db.campaigns.unshift({
         id: `c-${++db.seq}`, user_id: db.me, title: input.title, description: input.description,
         url: input.url, image_url: input.image_url || null, budget: input.budget, cpc: s.click_price,
-        clicks: 0, max_clicks: Math.floor(input.budget / s.click_price), spent: 0, status: "pending",
+        clicks: 0, max_clicks: Math.floor(input.budget / s.click_price), spent: 0, status: "active",
         created_at: iso(now()), ends_at: iso(now() + input.days * day),
       });
       emit();

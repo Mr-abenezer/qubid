@@ -1,28 +1,31 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
-import { fmt, timeAgo, type ActionResult, type Task, type Tx } from "../lib/types";
+import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type Task, type Tx } from "../lib/types";
 import { haptic, openLink } from "../lib/telegram";
-import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoLink, IcoMega, IcoPlay, IcoShield, IcoSpark, Modal, Ring, SectionH, Spinner } from "../components/ui";
+import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoLink, IcoMega, IcoPlay, IcoShield, IcoSpark, Modal, Ring, SectionH, Spinner } from "../components/ui";
 import { TxRow } from "./Wallet";
 
 export default function Home() {
-  const { user, wallet, settings, tasks, api, openProfile, setTab, refreshTasks, refreshCore } = useApp();
+  const { user, wallet, settings, tasks, ads, api, openProfile, setTab, refreshTasks, refreshAds, refreshCore } = useApp();
   const [recent, setRecent] = useState<Tx[] | null>(null);
   const [activity, setActivity] = useState(false);
   const [watch, setWatch] = useState(false);
   const [task, setTask] = useState<Task | null>(null);
+  const [ad, setAd] = useState<Ad | null>(null);
 
   useEffect(() => {
     api.listTransactions(6).then(setRecent).catch(() => setRecent([]));
   }, [api, wallet?.balance]);
 
   useEffect(() => { refreshTasks(); }, [refreshTasks]);
+  useEffect(() => { refreshAds(); }, [refreshAds, wallet?.balance]);
 
   if (!user || !wallet || !settings) return <HomeSkeleton />;
 
   const availTasks = tasks.filter((t) => !t.my_status || t.my_status === "rejected");
   const adReward = settings.ad_reward ?? 5;
-  const onReward = () => { refreshTasks(); refreshCore(); };
+  const liveAds = [...ads].sort((a, b) => (a.my_completions >= a.per_user_limit ? 1 : 0) - (b.my_completions >= b.per_user_limit ? 1 : 0));
+  const onReward = () => { refreshTasks(); refreshAds(); refreshCore(); };
 
   return (
     <div className="px-4 pt-4 pb-2">
@@ -85,7 +88,50 @@ export default function Home() {
         </div>
       </div>
 
-      {/* available tasks — published by users in Promote */}
+      {/* live ads — campaigns published in Promote appear here instantly */}
+      <SectionH title={`Live ads (${liveAds.length})`} />
+      <div className="space-y-3">
+        {liveAds.map((a, i) => {
+          const done = a.my_completions >= a.per_user_limit;
+          return (
+            <div key={a.id} className="stagger card p-3.5" style={{ "--i": i } as React.CSSProperties}>
+              <div className="flex items-start gap-3">
+                <span
+                  className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 border border-white/10"
+                  style={{ background: `linear-gradient(140deg, hsl(${a.hue} 72% 46%), hsl(${(a.hue + 42) % 360} 70% 34%))` }}
+                >
+                  <IcoMega size={19} />
+                </span>
+                <div className="grow min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-extrabold text-[14.5px] leading-tight truncate">{a.title}</div>
+                    <Chip tone="mint" className="shrink-0"><IcoCoin size={12} /> +{a.reward}</Chip>
+                  </div>
+                  <p className="text-[12.5px] text-mut leading-snug mt-1 line-clamp-2">{a.description}</p>
+                  <div className="flex items-center gap-2 mt-2.5">
+                    <Chip tone={a.source === "campaign" ? "gold" : "tg"}>
+                      {a.source === "campaign" ? <><IcoMega size={12} /> Community</> : <><IcoSpark size={12} /> Sponsored</>}
+                    </Chip>
+                    {a.ends_at && <Chip tone="dim"><IcoClock size={12} /> {timeLeft(a.ends_at)}</Chip>}
+                    <div className="grow" />
+                    {done
+                      ? <Chip tone="mint"><IcoCheck size={12} /> Done</Chip>
+                      : <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoEye size={14} /> View</Button>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {liveAds.length === 0 && (
+          <div className="card p-6 text-center">
+            <div className="text-[13.5px] font-bold text-mut">No ads right now</div>
+            <div className="text-[12.5px] text-dim mt-1">Ads published in Promote land here the same second they go live.</div>
+          </div>
+        )}
+      </div>
+
+      {/* available tasks */}
       <SectionH title={`Available Tasks (${availTasks.length})`} />
       <div className="space-y-3">
         {availTasks.map((t, i) => (
@@ -107,13 +153,14 @@ export default function Home() {
         {availTasks.length === 0 && (
           <div className="card p-6 text-center">
             <div className="text-[13.5px] font-bold text-mut">No tasks right now</div>
-            <div className="text-[12.5px] text-dim mt-1">New ads go live here as soon as users publish them in Promote.</div>
+            <div className="text-[12.5px] text-dim mt-1">Check the live ads above — new ones land there the moment they're published.</div>
           </div>
         )}
       </div>
 
       {watch && <WatchAdModal reward={adReward} onClose={() => setWatch(false)} onReward={onReward} />}
       {task && <TaskModal task={task} onClose={() => setTask(null)} onDone={onReward} />}
+      {ad && <AdModal ad={ad} onClose={() => setAd(null)} onDone={onReward} />}
 
       <Modal open={activity} onClose={() => setActivity(false)} title="Recent activity">
         <div className="card divide-y divide-line/60 overflow-hidden">
@@ -175,6 +222,75 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
           </>
         )}
       </div>
+    </Modal>
+  );
+}
+
+/* ── Live ad flow (campaigns published in Promote — instant payout) ────────── */
+function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDone: () => void }) {
+  const { api, toast, setWalletBalance } = useApp();
+  const [phase, setPhase] = useState<"ready" | "watch" | "claim" | "done">("ready");
+  const [deadline, setDeadline] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const start = () => {
+    haptic("light");
+    openLink(a.url);
+    setDeadline(new Date(Date.now() + Math.max(3, a.required_seconds) * 1000).toISOString());
+    setPhase("watch");
+  };
+
+  const claim = async () => {
+    setBusy(true);
+    const res: ActionResult = await api.completeAd(a.id, a.source).catch((e): ActionResult => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+    setBusy(false);
+    if (!res.ok) { toast(res.error ?? "Could not claim reward", "err"); onClose(); return; }
+    haptic("success");
+    if (res.balance !== undefined) setWalletBalance(res.balance);
+    setPhase("done");
+    toast(`+${res.reward ?? a.reward} Coins earned`, "ok");
+    onDone();
+  };
+
+  return (
+    <Modal open onClose={onClose} title={a.title}>
+      {phase === "done" ? (
+        <div className="anim-pop flex flex-col items-center py-4 text-center">
+          <div className="relative">
+            <span className="text-mint"><IcoCoin size={64} /></span>
+            <span className="absolute -top-2 -right-4 text-gold anim-float"><IcoSpark size={20} /></span>
+          </div>
+          <div className="font-display text-[30px] font-bold text-mint mt-4">+{a.reward}</div>
+          <div className="text-[13px] text-mut mt-1">View verified — Coins added to your balance</div>
+          <Button className="mt-5" full onClick={onClose}>Keep earning</Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[13.5px] text-mut leading-relaxed grow">{a.description}</p>
+            <Chip tone="mint" className="shrink-0"><IcoCoin size={12} /> +{a.reward}</Chip>
+          </div>
+          <div className="flex gap-1.5 mt-3 flex-wrap">
+            <Chip tone={a.source === "campaign" ? "gold" : "tg"}>
+              {a.source === "campaign" ? <><IcoMega size={12} /> Community</> : <><IcoSpark size={12} /> Sponsored</>}
+            </Chip>
+            <Chip tone="dim"><IcoClock size={12} /> {Math.max(3, a.required_seconds)}s view</Chip>
+          </div>
+
+          {phase === "ready" && (
+            <Button variant="sky" full size="lg" className="mt-4" onClick={start}>
+              <IcoLink size={17} /> Open link & start timer
+            </Button>
+          )}
+          {phase === "watch" && deadline && (
+            <div className="flex flex-col items-center mt-4">
+              <Ring deadline={deadline} totalSec={Math.max(3, a.required_seconds)} size={130} onExpire={() => { setPhase("claim"); haptic("medium"); }} />
+              <Chip tone="dim" className="mt-3"><IcoEye size={12} /> Keep the page open — verifying your view…</Chip>
+            </div>
+          )}
+          {phase === "claim" && <ClaimButton busy={busy} reward={a.reward} onClick={claim} />}
+        </>
+      )}
     </Modal>
   );
 }

@@ -268,6 +268,16 @@ export const timeAgo = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
+export const timeLeft = (iso: string) => {
+  const s = Math.floor((new Date(iso).getTime() - Date.now()) / 1000);
+  if (s <= 60) return "ending soon";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m left`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h left`;
+  return `${Math.floor(h / 24)}d left`;
+};
+
 export const TX_META: Record<string, { label: string; tone: "mint" | "coral" | "gold" | "sky" }> = {
   ad_reward: { label: "Ad reward", tone: "mint" },
   click_reward: { label: "Click reward", tone: "mint" },
