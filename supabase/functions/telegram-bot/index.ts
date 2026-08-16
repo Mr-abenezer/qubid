@@ -38,9 +38,15 @@ const welcomeText = (name: string, invited: boolean) =>
 const hintText = () =>
   `🎰 <b>Bid X</b> lives in the mini app — balance, ads, tasks, Bid &amp; Win and withdrawals.\n\nTap below to open it 👇`;
 
+// Telegram only accepts web_app buttons whose URL starts with https://.
+// Anything else (e.g. a bare t.me link saved in MINI_APP_URL) would make every
+// sendMessage fail with "invalid button url" — so we validate and fall back to
+// the t.me app link instead of silently breaking the bot.
 const openButton = (payload: string) => {
   const q = payload ? `?startapp=${encodeURIComponent(payload)}` : "";
-  if (MINI_APP_URL) return { text: "▶  Open Bid X", web_app: { url: `${MINI_APP_URL}${q}` } };
+  if (/^https:\/\//.test(MINI_APP_URL)) {
+    return { text: "▶  Open Bid X", web_app: { url: `${MINI_APP_URL}${q}` } };
+  }
   return { text: "▶  Open Bid X", url: `${TG_APP_LINK}${q}` };
 };
 
