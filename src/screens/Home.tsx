@@ -116,7 +116,7 @@ export default function Home() {
                     <div className="grow" />
                     {done
                       ? <Chip tone="mint"><IcoCheck size={12} /> Done</Chip>
-                      : <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoEye size={14} /> View</Button>}
+                      : <Button size="sm" onClick={() => { haptic("medium"); openLink(a.url); setAd(a); }}><IcoEye size={14} /> Open</Button>}
                   </div>
                 </div>
               </div>

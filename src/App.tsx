@@ -200,27 +200,27 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         <div className="grid grid-cols-5 items-end">
           {left.map(side)}
 
-          {/* Bid & Win — colorful, live, fully inside the bar */}
-          <button onClick={() => setTab("arena")} className="tap relative flex flex-col items-center pt-2 pb-2 group" aria-label="Bid & Win">
+          {/* Bid & Win — compact, colorful, live, sized to fit the bar */}
+          <button onClick={() => setTab("arena")} className="tap relative flex flex-col items-center pt-1 pb-1.5 group" aria-label="Bid & Win">
             <span
-              className={`relative w-14 h-14 rounded-full flex items-center justify-center text-[#331303] border-[3px] border-abyss transition-all duration-200 group-active:scale-95
-                ${arenaActive ? "scale-[1.04]" : ""}`}
+              className={`relative w-10 h-10 rounded-full flex items-center justify-center text-[#331303] border-2 border-abyss transition-all duration-200 group-active:scale-95
+                ${arenaActive ? "scale-[1.07]" : ""}`}
               style={{
                 background: "linear-gradient(140deg,#ffd76a 0%,#ffab4a 40%,#ff6b7a 78%,#ff4d5e 100%)",
                 boxShadow: arenaActive
-                  ? "0 10px 26px -8px rgba(255,107,122,0.75), 0 0 0 3px rgba(255,194,75,0.35)"
-                  : "0 10px 24px -10px rgba(255,107,122,0.6)",
+                  ? "0 8px 20px -6px rgba(255,107,122,0.8), 0 0 0 3px rgba(255,194,75,0.32)"
+                  : "0 8px 18px -8px rgba(255,107,122,0.65)",
               }}
             >
-              <IcoGavel size={24} />
+              <IcoGavel size={19} />
               {/* LIVE badge with hot flame */}
-              <span className="absolute -top-1 -right-2.5 flex items-center gap-[3px] rounded-full bg-abyss border border-coral/70 px-1.5 py-[3px] text-[7.5px] font-black tracking-[0.08em] text-coral shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                <IcoFlame size={9} className="text-gold" />
+              <span className="absolute -top-1 -right-2.5 flex items-center gap-[2.5px] rounded-full bg-abyss border border-coral/70 px-1 py-[2px] text-[6.5px] font-black tracking-[0.08em] text-coral shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                <IcoFlame size={7.5} className="text-gold" />
                 LIVE
               </span>
               <span className="absolute inset-0 rounded-full border border-gold/40" style={{ animation: "radar 2.4s ease-out infinite" }} />
             </span>
-            <span className={`text-[10px] font-extrabold tracking-wide mt-1 transition-colors duration-200 ${arenaActive ? "text-gold" : "text-mut"}`}>Bid &amp; Win</span>
+            <span className={`text-[10px] font-extrabold tracking-wide mt-0.5 transition-colors duration-200 ${arenaActive ? "text-gold" : "text-mut"}`}>Bid &amp; Win</span>
           </button>
 
           {right.map(side)}
