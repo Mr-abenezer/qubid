@@ -169,6 +169,8 @@ function seed(): Db {
       { user_id: "u6", referred_by: "u-me", completed: 12, earned: 90 },
       { user_id: "u7", referred_by: "u-me", completed: 7, earned: 65 },
       { user_id: "u8", referred_by: "u-me", completed: 3, earned: 45 },
+      // joined recently, hasn't completed a task yet — shows as Pending
+      { user_id: "u4", referred_by: "u-me", completed: 0, earned: 0 },
     ],
     settings: { ...DEFAULTS },
     fees: 1350, seq: 1000,
@@ -309,11 +311,17 @@ export function createMockBackend(): Backend {
       if (mine.length) {
         const row = mine[Math.floor(Math.random() * mine.length)];
         const c = db.settings.referral_commission;
-        if (c > 0) {
-          row.completed += 1;
-          row.earned += c;
-          const friend = db.users[row.user_id];
-          credit(db.me, c, "referral_commission", `@${friend?.username ?? "friend"} completed a task`);
+        const friend = db.users[row.user_id];
+        const uname = friend?.username ?? "friend";
+        const isFirst = row.completed === 0;
+        row.completed += 1;
+        row.earned += c;
+        if (c > 0) credit(db.me, c, "referral_commission", `@${uname} completed a task`);
+        if (isFirst) {
+          // first task validates the referral — one-time join bonus unlocks
+          const b = db.settings.referral_bonus;
+          row.earned += b;
+          if (b > 0) credit(db.me, b, "referral_bonus", `@${uname} completed their first task — referral validated`);
         }
       }
     }
@@ -486,16 +494,20 @@ export function createMockBackend(): Backend {
 
     async getReferralStats() {
       await d();
+      const bonus = db.settings.referral_bonus;
+      const comm = db.settings.referral_commission;
       const rows = db.referrals
         .filter((x) => x.referred_by === db.me)
         .map((x) => {
           const u = db.users[x.user_id];
+          const validated = x.completed >= 1;
           return {
             id: `rf-${x.user_id}`,
             user: { id: u.id, telegram_id: u.telegram_id, username: u.username, first_name: u.first_name, photo_url: u.photo_url },
             joined_at: u.created_at,
             completed: x.completed,
-            earned: x.earned,
+            earned: x.completed * comm + (validated ? bonus : 0),
+            status: (validated ? "validated" : "pending") as "validated" | "pending",
           };
         })
         .sort((a, b) => b.joined_at.localeCompare(a.joined_at));

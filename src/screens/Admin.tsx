@@ -577,7 +577,7 @@ function SettingsTab() {
           <F k="referral_commission" label="Per-task commission" />
         </div>
         <div className="text-[11.5px] text-dim leading-relaxed mt-1">
-          Inviters receive the bonus when a friend joins, plus the commission on every task/ad the friend completes. Withdrawals are paid in <b className="text-mut">USDT · BEP20</b> only.
+          A referral is <b className="text-mut">validated when the friend completes their first task</b> — only then the invite bonus is paid. The commission applies to every task/ad the friend completes. Withdrawals are paid in <b className="text-mut">USDT · BEP20</b> only.
         </div>
       </div>
       <div className="card p-4 mt-3">

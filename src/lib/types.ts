@@ -157,6 +157,7 @@ export interface Referral {
   joined_at: string;
   completed: number; // tasks/ads this friend has completed
   earned: number;    // Coins this friend has earned you
+  status: "pending" | "validated"; // validated once they complete >= 1 task
 }
 
 export interface ReferralStats {

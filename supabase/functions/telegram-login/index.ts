@@ -91,20 +91,23 @@ Deno.serve(async (req) => {
       });
 
     // 1 · upsert the Bid X account — Telegram id is the unique key
-    // Referral: when a brand-new account arrives with ?startapp=<telegram_id>
-    // (initData.start_param), store the inviter on the row — the DB trigger
-    // users_referral_join (migration 002) credits the inviter atomically.
+    // Referral: ?startapp=<telegram_id> arrives as initData.start_param.
+    // New accounts get referred_by on insert; existing accounts are linked
+    // retroactively — but ONLY if they have no inviter yet (first link wins).
+    // The +bonus itself is paid by the DB when the friend completes their
+    // first task (migration 003), never here.
     let referredBy: string | undefined;
-    const existsRes = await rest(`users?telegram_id=eq.${tid}&select=id`);
-    const exists = existsRes.ok ? ((await existsRes.json()) as { id: string }[]) : [];
-    if (exists.length === 0) {
-      const sp = String(data.start_param ?? "").replace(/[^0-9]/g, "");
-      if (sp && sp !== tid) {
-        const invRes = await rest(`users?telegram_id=eq.${sp}&select=id`);
-        const inv = invRes.ok ? ((await invRes.json()) as { id: string }[]) : [];
-        if (inv[0]?.id) referredBy = inv[0].id;
-      }
+    const sp = String(data.start_param ?? "").replace(/[^0-9]/g, "");
+    let inviterId: string | null = null;
+    if (sp && sp !== tid) {
+      const invRes = await rest(`users?telegram_id=eq.${sp}&select=id`);
+      const inv = invRes.ok ? ((await invRes.json()) as { id: string }[]) : [];
+      inviterId = inv[0]?.id ?? null;
     }
+    const existsRes = await rest(`users?telegram_id=eq.${tid}&select=id,referred_by`);
+    const exists = existsRes.ok ? ((await existsRes.json()) as { id: string; referred_by: string | null }[]) : [];
+    const isNew = exists.length === 0;
+    if (isNew && inviterId) referredBy = inviterId;
     const userRes = await rest("users?on_conflict=telegram_id&select=*", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
@@ -123,6 +126,16 @@ Deno.serve(async (req) => {
     const user = (Array.isArray(rows) ? rows[0] : rows) as Record<string, unknown> | undefined;
     if (!user?.id) return json({ error: "Could not resolve the user row" }, 500);
     if (user.status !== "active") return json({ error: `Account is ${user.status}` }, 403);
+
+    // 1b · retroactive referral link: an existing account that arrived through
+    // an invite link but never had an inviter gets linked now. The is.null
+    // guard makes it first-link-wins and idempotent.
+    if (!isNew && inviterId && !user.referred_by) {
+      await rest(`users?id=eq.${user.id}&referred_by=is.null`, {
+        method: "PATCH",
+        body: JSON.stringify({ referred_by: inviterId }),
+      });
+    }
 
     // 2 · guarantee a Coin wallet exists
     await rest("wallets?on_conflict=user_id", {

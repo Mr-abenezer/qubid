@@ -31,7 +31,7 @@ const welcomeText = (name: string, invited: boolean) =>
   `🎰 <b>Bid &amp; Win</b> — outlast everyone and take 85% of the pot\n` +
   `📺 Watch ads &amp; finish tasks to earn Coins\n` +
   `💸 Withdraw to <b>USDT (BEP20)</b>\n` +
-  `🎁 Invite friends — <b>+30 Coins</b> per friend, <b>+5</b> per task they finish\n\n` +
+  `🎁 Invite friends — <b>+30 Coins</b> when they finish their first task, <b>+5</b> per task after\n\n` +
   (invited ? `🤝 You joined with a friend's link — your bonus is being applied!\n\n` : ``) +
   `Tap below and start earning 👇`;
 
