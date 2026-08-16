@@ -113,6 +113,7 @@ export function createSupabaseBackend(initDataStr: string): Backend {
 
     async listAds() { return rpc(sb, "list_ads"); },
     async completeAd(adId, source) { return A(sb.rpc("complete_ad" as never, { p_id: adId, p_source: source } as never)); },
+    async completeRewardAd() { return A(sb.rpc("watch_reward_ad" as never)); },
     async listTasks() { return rpc(sb, "list_tasks"); },
     async submitTask(taskId, proof) {
       const r = await A(sb.rpc("submit_task" as never, { p_id: taskId, p_proof: proof } as never));

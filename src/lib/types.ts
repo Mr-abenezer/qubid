@@ -202,6 +202,7 @@ export interface Backend {
   // earning
   listAds(): Promise<Ad[]>;
   completeAd(adId: string, source: "ad" | "campaign"): Promise<ActionResult>;
+  completeRewardAd(): Promise<ActionResult>; // generic rewarded video (no ad row)
   listTasks(): Promise<Task[]>;
   submitTask(taskId: string, proof: string): Promise<ActionResult & { auto?: boolean }>;
   // campaigns

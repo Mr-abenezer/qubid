@@ -22,6 +22,25 @@
   --color-tg: #2aabee;
 }
 
+/* ─── light theme: same tokens, day-shifted ─────────────────────────────── */
+.light {
+  --color-abyss: #e9f1f8;
+  --color-deep: #f7fbfe;
+  --color-panel: #e3edf6;
+  --color-panel2: #d4e3f0;
+  --color-line: #c3d6e6;
+  --color-line2: #adc7dc;
+  --color-ink: #142c44;
+  --color-mut: #4c6580;
+  --color-dim: #7e94a9;
+  --color-gold: #d78f00;
+  --color-gold2: #b37400;
+  --color-mint: #0c9d68;
+  --color-coral: #dd4a5b;
+  --color-sky: #0b8fd1;
+  --color-tg: #1588c7;
+}
+
 * { -webkit-tap-highlight-color: transparent; }
 
 html, body, #root { min-height: 100%; }
@@ -48,6 +67,7 @@ body {
 .hide-scroll::-webkit-scrollbar { display: none; }
 .hide-scroll { scrollbar-width: none; }
 .safe-b { padding-bottom: calc(env(safe-area-inset-bottom, 0px)); }
+:root { --ring-track: #1e3a56; }
 
 .card {
   background: linear-gradient(165deg, rgba(22, 48, 74, 0.55), rgba(15, 33, 54, 0.9));
@@ -148,3 +168,40 @@ body {
   font-weight: 700;
 }
 .chip-q:hover { color: var(--color-gold); border-color: rgba(255, 194, 75, 0.45); }
+
+/* ─── light-theme surfaces ──────────────────────────────────────────────── */
+.light { --ring-track: #c6d8e8; color-scheme: light; }
+
+.light body {
+  background-image:
+    radial-gradient(1100px 520px at 85% -10%, rgba(215, 143, 0, 0.10), transparent 60%),
+    radial-gradient(900px 600px at -15% 110%, rgba(21, 136, 199, 0.10), transparent 55%),
+    radial-gradient(700px 500px at 50% 45%, rgba(12, 157, 104, 0.05), transparent 60%);
+}
+
+.light .dotgrid { background-image: radial-gradient(rgba(52, 90, 128, 0.12) 1px, transparent 1.4px); }
+
+.light .card {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 252, 0.94));
+  border-color: rgba(173, 199, 220, 0.75);
+  box-shadow: 0 12px 30px -20px rgba(30, 78, 126, 0.35);
+}
+
+.light .sheen::after { background: linear-gradient(90deg, transparent, rgba(215, 143, 0, 0.16), transparent); }
+
+.light .skeleton {
+  background: linear-gradient(90deg, rgba(195, 214, 230, 0.5) 25%, rgba(173, 199, 220, 0.85) 50%, rgba(195, 214, 230, 0.5) 75%);
+  background-size: 900px 100%;
+}
+
+.light .input {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(173, 199, 220, 0.9);
+}
+.light .input:focus { border-color: rgba(215, 143, 0, 0.7); box-shadow: 0 0 0 3px rgba(215, 143, 0, 0.14); }
+
+.light .holo-border > .holo-inner { background: linear-gradient(160deg, #ffffff 0%, #f2f8fd 70%); }
+
+.light .chip-q { background: rgba(255, 255, 255, 0.85); border-color: rgba(173, 199, 220, 0.9); }
+
+.light .glow-gold { text-shadow: 0 0 18px rgba(215, 143, 0, 0.28); }

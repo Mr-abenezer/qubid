@@ -187,7 +187,7 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
     if (settled.current) return;
     settled.current = true;
     setPhase("crediting");
-    const res: ActionResult = await api.completeAd("reward-ad", "ad").catch((e): ActionResult => ({ ok: false, error: String(e) }));
+    const res: ActionResult = await api.completeRewardAd().catch((e): ActionResult => ({ ok: false, error: String(e) }));
     if (!res.ok) { toast(res.error ?? "Could not claim reward", "err"); onClose(); return; }
     haptic("success");
     if (res.balance !== undefined) setWalletBalance(res.balance);

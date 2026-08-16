@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Ad, Backend, Bootstrap, RoundState, Settings, Task, UserProfile, Wallet } from "../lib/types";
-import { haptic } from "../lib/telegram";
+import { haptic, setChromeColor, THEME_KEY } from "../lib/telegram";
 
 export type Tab = "home" | "promote" | "arena" | "invite" | "wallet";
+export type Theme = "dark" | "light";
 export interface Toast { id: number; msg: string; kind: "ok" | "err" | "info" }
 
 interface Ctx {
@@ -18,6 +19,8 @@ interface Ctx {
   retryBoot: () => void;
   tab: Tab;
   setTab: (t: Tab) => void;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
   openProfile: () => void;
   openAdmin: () => void;
   toasts: Toast[];
@@ -53,7 +56,25 @@ export function AppProvider({ backend, onProfile, onAdmin, children }: {
   const [bootError, setBootError] = useState<string | null>(null);
   const [tab, setTabRaw] = useState<Tab>("home");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [theme, setThemeState] = useState<Theme>(() => {
+    try {
+      const t = localStorage.getItem(THEME_KEY);
+      if (t === "light" || t === "dark") return t;
+      return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    } catch { return "dark"; }
+  });
   const busy = useRef(false);
+
+  const setTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+    try { localStorage.setItem(THEME_KEY, t); } catch { /* private mode */ }
+    haptic("light");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", theme === "light");
+    setChromeColor(theme === "light");
+  }, [theme]);
 
   const toast = useCallback((msg: string, kind: Toast["kind"] = "info") => {
     const id = toastSeq++;
@@ -121,7 +142,7 @@ export function AppProvider({ backend, onProfile, onAdmin, children }: {
     <AppCtx.Provider value={{
       mode: backend.mode, api: backend, user, settings, wallet, ads, tasks, round,
       bootError, retryBoot: () => { setBootError(null); busy.current = false; refreshCore(); },
-      tab, setTab, openProfile: onProfile, openAdmin: onAdmin,
+      tab, setTab, theme, setTheme, openProfile: onProfile, openAdmin: onAdmin,
       toasts, toast,
       setWalletBalance: (n) => setWallet((w) => (w ? { ...w, balance: n } : w)),
       refreshCore, refreshAds, refreshTasks, refreshRound,

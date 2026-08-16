@@ -85,6 +85,10 @@ export const IcoGift = (p: IP) => (
 export const IcoCopy = (p: IP) => (
   <Svg {...p}><rect x="8.5" y="8.5" width="12" height="12" rx="2.2" /><path d="M15.5 5.3v-.5a2.3 2.3 0 0 0-2.3-2.3H5.8a2.3 2.3 0 0 0-2.3 2.3v7.4a2.3 2.3 0 0 0 2.3 2.3h.5" /></Svg>
 );
+export const IcoSun = (p: IP) => (
+  <Svg {...p}><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19" /></Svg>
+);
+export const IcoMoon = (p: IP) => <Svg {...p}><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" /></Svg>;
 export const IcoShare = (p: IP) => (
   <Svg {...p}><circle cx="6" cy="12" r="2.6" /><circle cx="17.5" cy="5.5" r="2.6" /><circle cx="17.5" cy="18.5" r="2.6" /><path d="M8.4 10.8l6.8-4M8.4 13.2l6.8 4" /></Svg>
 );
@@ -323,7 +327,7 @@ export function Ring({ deadline, totalSec, size = 168, onExpire }: { deadline: s
   return (
     <div className={`relative ${urgent ? "anim-urgent" : ""}`} style={{ width: size, height: size }}>
       <svg viewBox="0 0 120 120" width={size} height={size} className="-rotate-90">
-        <circle cx="60" cy="60" r={R} stroke="#1e3a56" strokeWidth="7" fill="none" />
+        <circle cx="60" cy="60" r={R} stroke="var(--ring-track, #1e3a56)" strokeWidth="7" fill="none" />
         {remaining !== null && (
           <circle cx="60" cy="60" r={R} stroke={urgent ? "#ff6b7a" : "#ffc24b"} strokeWidth="7" fill="none"
             strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)}

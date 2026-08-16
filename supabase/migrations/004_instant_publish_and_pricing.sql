@@ -173,3 +173,23 @@ begin
   where id = p_id;
   return jsonb_build_object('ok', true, 'balance', v_balance, 'budget', v_new);
 end $$;
+
+-- ─── rewarded video slot (AdsGram) — no ad row, no uuid needed ─────────────
+create or replace function public.watch_reward_ad() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare u public.users := public.me(); v_daily int; v_reward int; v_balance bigint;
+begin
+  if u.id is null then raise exception 'Not authenticated'; end if;
+  if (public.get_setting('maintenance_mode'))::boolean and not public.is_admin() then
+    raise exception 'Earning is paused (maintenance mode)';
+  end if;
+  select count(*) into v_daily from public.transactions
+    where user_id = u.id and created_at >= current_date and type in ('ad_reward','click_reward');
+  if v_daily >= (public.get_setting('daily_ad_limit'))::int then
+    raise exception 'Daily ad limit reached — come back tomorrow';
+  end if;
+  v_reward := (public.get_setting('ad_reward'))::int;
+  v_balance := public.adjust_balance(u.id, v_reward, 'ad_reward', 'Watch Ad reward');
+  perform public.notify_user(u.id, 'earn', 'Coins earned', '+' || v_reward || ' Coins — keep going!');
+  return jsonb_build_object('ok', true, 'reward', v_reward, 'balance', v_balance);
+end $$;

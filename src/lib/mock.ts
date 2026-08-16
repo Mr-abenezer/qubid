@@ -386,16 +386,6 @@ export function createMockBackend(): Backend {
     async completeAd(adId, source) {
       await d(350);
       const u = meU();
-      // generic rewarded-video slot (AdsGram) — pays the standard ad reward
-      if (source === "ad" && adId === "reward-ad") {
-        const today = iso(now()).slice(0, 10);
-        const todayCount = (db.txs[db.me] ?? []).filter((t) => t.created_at.slice(0, 10) === today && (t.type === "ad_reward" || t.type === "click_reward")).length;
-        if (todayCount >= db.settings.daily_ad_limit) return fail("Daily ad limit reached — come back tomorrow");
-        const tx = credit(db.me, db.settings.ad_reward, "ad_reward", "Watch Ad reward");
-        commission(db.me, "Watch Ad — friend activity");
-        emit();
-        return ok({ reward: tx.amount, balance: meU().balance });
-      }
       if (source === "campaign") {
         const c = db.campaigns.find((x) => x.id === adId);
         if (!c || c.status !== "active") return fail("Campaign is no longer active");
@@ -420,6 +410,18 @@ export function createMockBackend(): Backend {
       (db.adDone[a.id] ??= {})[db.me] = done + 1;
       const tx = credit(db.me, a.reward, "ad_reward", a.title);
       commission(db.me, `${a.title} — friend activity`);
+      emit();
+      return ok({ reward: tx.amount, balance: meU().balance });
+    },
+
+    async completeRewardAd() {
+      await d(350);
+      // generic rewarded-video slot (AdsGram) — pays the standard ad reward
+      const today = iso(now()).slice(0, 10);
+      const todayCount = (db.txs[db.me] ?? []).filter((t) => t.created_at.slice(0, 10) === today && (t.type === "ad_reward" || t.type === "click_reward")).length;
+      if (todayCount >= db.settings.daily_ad_limit) return fail("Daily ad limit reached — come back tomorrow");
+      const tx = credit(db.me, db.settings.ad_reward, "ad_reward", "Watch Ad reward");
+      commission(db.me, "Watch Ad — friend activity");
       emit();
       return ok({ reward: tx.amount, balance: meU().balance });
     },

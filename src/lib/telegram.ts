@@ -21,14 +21,33 @@ export const tgUser = (): any => tg()?.initDataUnsafe?.user ?? null;
 
 export const initData = (): string => tg()?.initData ?? "";
 
+export const THEME_KEY = "bidx_theme";
+export const themeColor = (light: boolean) => (light ? "#e9f1f8" : "#07111d");
+
+export function setChromeColor(light: boolean) {
+  try {
+    const w = tg();
+    if (!w) return;
+    const c = themeColor(light);
+    w.setHeaderColor?.(c);
+    w.setBackgroundColor?.(c);
+  } catch {
+    /* non-fatal */
+  }
+}
+
 export function bootTelegram() {
   try {
     const w = tg();
     if (!w) return;
     w.ready();
     w.expand();
-    w.setHeaderColor?.("#07111d");
-    w.setBackgroundColor?.("#07111d");
+    let light = false;
+    try {
+      const t = localStorage.getItem(THEME_KEY);
+      light = t === "light" || (!t && window.matchMedia?.("(prefers-color-scheme: light)").matches);
+    } catch { /* default dark */ }
+    setChromeColor(light);
     w.disableVerticalSwipes?.();
   } catch {
     /* non-fatal */

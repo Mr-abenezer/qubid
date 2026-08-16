@@ -4,6 +4,10 @@ import { fmt, timeAgo, usdtOf, TX_META, type ActionResult, type Tx, type Withdra
 import { haptic } from "../lib/telegram";
 import { Button, Chip, CountUp, Empty, IcoCoin, IcoDownL, IcoUpR, IcoWallet, Pill, Seg } from "../components/ui";
 
+// Payout rate for Telebirr: 1 USDT ≈ 180 Birr → 1 Coin ≈ 0.2 Birr
+const BIRR_PER_COIN = 0.2;
+const birrOf = (coins: number) => (coins * BIRR_PER_COIN).toLocaleString("en-US", { maximumFractionDigits: 1 });
+
 export function TxRow({ tx, showBalance }: { tx: Tx; showBalance?: boolean }) {
   const meta = TX_META[tx.type] ?? { label: tx.type, tone: "sky" as const };
   const positive = tx.amount > 0;
@@ -155,7 +159,11 @@ export default function Wallet() {
         <div className="card bg-panel/70 p-3.5 mt-3 flex items-center justify-between">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-dim">You receive</div>
-            <div className="font-display text-[20px] font-bold text-mint tnum">{coinsNum > 0 ? usdt : "0.00"} <span className="text-[13px] text-mut">USDT</span></div>
+            {network === "Telebirr" ? (
+              <div className="font-display text-[20px] font-bold text-sky tnum">{coinsNum > 0 ? birrOf(coinsNum) : "0.0"} <span className="text-[13px] text-mut">Birr</span></div>
+            ) : (
+              <div className="font-display text-[20px] font-bold text-mint tnum">{coinsNum > 0 ? usdt : "0.00"} <span className="text-[13px] text-mut">USDT</span></div>
+            )}
           </div>
           <Chip tone={coinsNum >= min && coinsNum <= wallet.balance && coinsNum > 0 ? "mint" : "dim"}>
             {coinsNum > 0 ? (coinsNum < min ? `min ${fmt(min)}` : coinsNum > wallet.balance ? "over balance" : "valid") : `min ${fmt(min)} Coins`}
@@ -164,7 +172,7 @@ export default function Wallet() {
 
         {network === "Telebirr" && (
           <div className="text-[11.5px] text-sky/90 font-semibold mt-2.5 text-center">
-            Telebirr payouts are sent in Ethiopian Birr at the current exchange rate.
+            Paid in Ethiopian Birr · 1 Coin ≈ {BIRR_PER_COIN} Birr (1 USDT ≈ 180 Birr)
           </div>
         )}
 
