@@ -462,6 +462,42 @@ export function createMockBackend(): Backend {
       return ok({ balance: u.balance });
     },
 
+    // ── owner-side campaign management ──────────────────────────────────
+    async ownerCampaignAction(id, action) {
+      await d(280);
+      const c = db.campaigns.find((x) => x.id === id && x.user_id === db.me);
+      if (!c) return fail("Campaign not found");
+      if (action === "pause") {
+        if (c.status !== "active") return fail("Only live campaigns can be paused");
+        c.status = "paused";
+      } else if (action === "resume") {
+        if (c.status !== "paused") return fail("Only paused campaigns can be resumed");
+        if (c.ends_at && now() > new Date(c.ends_at).getTime()) return fail("This campaign already ended");
+        c.status = "active";
+      } else if (action === "delete") {
+        const remaining = c.budget - c.spent;
+        if (remaining > 0) credit(db.me, remaining, "campaign_refund", `Campaign deleted — ${c.title}`);
+        db.campaigns = db.campaigns.filter((x) => x.id !== id);
+      } else return fail("Unknown action");
+      emit();
+      return ok({ balance: meU().balance });
+    },
+
+    async ownerSetCampaignBudget(id, budget) {
+      await d(320);
+      const c = db.campaigns.find((x) => x.id === id && x.user_id === db.me);
+      if (!c) return fail("Campaign not found");
+      if (["completed", "rejected", "refunded"].includes(c.status)) return fail("This campaign is finished");
+      const newBudget = Math.max(Math.floor(budget), c.spent, db.settings.min_campaign_budget);
+      if (newBudget > 50000) return fail("Maximum campaign budget is 50,000 Coins");
+      const delta = newBudget - c.budget;
+      if (delta !== 0) credit(db.me, -delta, "campaign_deposit", `Budget updated — ${c.title}`);
+      c.budget = newBudget;
+      c.max_clicks = c.cpc > 0 ? Math.floor(newBudget / c.cpc) : 0;
+      emit();
+      return ok({ balance: meU().balance });
+    },
+
     async getRound() { await d(180); return snap(); },
     async placeBid(amount) {
       await d(300);

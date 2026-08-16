@@ -30,7 +30,7 @@ begin
   if p_budget < (public.get_setting('min_campaign_budget'))::int then
     raise exception 'Minimum campaign budget is % Coins', public.get_setting('min_campaign_budget');
   end if;
-  if p_budget > 1000000 then raise exception 'Budget too large'; end if;
+  if p_budget > 50000 then raise exception 'Maximum campaign budget is 50,000 Coins'; end if;
   v_balance := public.adjust_balance(u.id, -p_budget, 'campaign_deposit', 'Campaign budget — ' || p_title);
   -- status is 'active' straight away: the ad is live on Home the second it is paid for
   insert into public.campaigns(user_id, title, description, url, image_url, budget, cpc, max_clicks, ends_at, status)
@@ -120,4 +120,56 @@ begin
   perform public.notify_user(c.user_id, 'campaign', 'Campaign ' || p_action, 'Your campaign "' || c.title || '" was ' || p_action || 'd by an admin.');
   perform public.audit('campaign_' || p_action, p_id::text);
   return jsonb_build_object('ok', true);
+end $$;
+
+-- ─── owner-side campaign management (no admin needed) ──────────────────────
+create or replace function public.owner_campaign_action(p_id uuid, p_action text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare c public.campaigns; v_remaining bigint; v_balance bigint;
+begin
+  -- owners only: the row lock also proves the caller owns the campaign
+  select * into c from public.campaigns where id = p_id and user_id = (public.me()).id for update;
+  if not found then raise exception 'Campaign not found'; end if;
+  v_balance := (select balance from public.wallets where user_id = c.user_id);
+  case p_action
+    when 'pause' then
+      if c.status <> 'active' then raise exception 'Only live campaigns can be paused'; end if;
+      update public.campaigns set status = 'paused' where id = p_id;
+    when 'resume' then
+      if c.status <> 'paused' then raise exception 'Only paused campaigns can be resumed'; end if;
+      if c.ends_at is not null and c.ends_at <= now() then raise exception 'This campaign already ended'; end if;
+      update public.campaigns set status = 'active' where id = p_id;
+    when 'delete' then
+      -- unspent budget is refunded and the campaign disappears entirely
+      v_remaining := c.budget - c.spent;
+      if v_remaining > 0 then
+        v_balance := public.adjust_balance(c.user_id, v_remaining, 'campaign_refund', 'Campaign deleted — ' || c.title, p_id);
+      end if;
+      delete from public.campaigns where id = p_id;
+    else raise exception 'Unknown action %', p_action;
+  end case;
+  return jsonb_build_object('ok', true, 'balance', v_balance);
+end $$;
+
+create or replace function public.owner_set_campaign_budget(p_id uuid, p_budget bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare c public.campaigns; v_new bigint; v_delta bigint; v_balance bigint;
+begin
+  select * into c from public.campaigns where id = p_id and user_id = (public.me()).id for update;
+  if not found then raise exception 'Campaign not found'; end if;
+  if c.status in ('completed', 'rejected', 'refunded') then raise exception 'This campaign is finished'; end if;
+  -- never below what is already spent, never above the 50k cap
+  v_new := greatest(coalesce(p_budget, 0), c.spent, (public.get_setting('min_campaign_budget'))::int);
+  if v_new > 50000 then raise exception 'Maximum campaign budget is 50,000 Coins'; end if;
+  v_delta := v_new - c.budget;
+  v_balance := (select balance from public.wallets where user_id = c.user_id);
+  if v_delta <> 0 then
+    -- positive delta reserves more Coins, negative delta refunds the difference
+    v_balance := public.adjust_balance(c.user_id, -v_delta, 'campaign_deposit', 'Budget updated — ' || c.title, p_id);
+  end if;
+  update public.campaigns set
+    budget = v_new,
+    max_clicks = case when c.cpc > 0 then floor(v_new::numeric / c.cpc)::int else 0 end
+  where id = p_id;
+  return jsonb_build_object('ok', true, 'balance', v_balance, 'budget', v_new);
 end $$;

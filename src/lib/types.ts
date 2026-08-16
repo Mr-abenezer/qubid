@@ -214,6 +214,9 @@ export interface Backend {
     budget: number;
     days: number;
   }): Promise<ActionResult>;
+  // owner-side campaign management (no admin needed)
+  ownerCampaignAction(id: string, action: "pause" | "resume" | "delete"): Promise<ActionResult>;
+  ownerSetCampaignBudget(id: string, budget: number): Promise<ActionResult>;
   // bid & win
   getRound(): Promise<RoundState>;
   placeBid(amount: number): Promise<ActionResult>;

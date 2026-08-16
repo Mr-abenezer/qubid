@@ -126,6 +126,12 @@ export function createSupabaseBackend(initDataStr: string): Backend {
         p_image: input.image_url, p_budget: input.budget, p_days: input.days,
       } as never));
     },
+    async ownerCampaignAction(id, action) {
+      return A(sb.rpc("owner_campaign_action" as never, { p_id: id, p_action: action } as never));
+    },
+    async ownerSetCampaignBudget(id, budget) {
+      return A(sb.rpc("owner_set_campaign_budget" as never, { p_id: id, p_budget: budget } as never));
+    },
 
     async getRound() { return rpc(sb, "get_round"); },
     async placeBid(amount) { return A(sb.rpc("place_bid" as never, { p_amount: amount } as never)); },

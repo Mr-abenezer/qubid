@@ -192,7 +192,7 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
   };
 
   return (
-    <Modal open onClose={onClose} title={phase === "done" ? "Reward credited" : "Watch Ad"}>
+    <Modal open onClose={onClose} title={phase === "done" ? "Reward credited" : "Watch Ad"} center>
       <div className="flex flex-col items-center text-center">
         {phase === "done" ? (
           <div className="anim-pop flex flex-col items-center py-4">
@@ -253,7 +253,7 @@ function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDo
   };
 
   return (
-    <Modal open onClose={onClose} title={a.title}>
+    <Modal open onClose={onClose} title={a.title} center>
       {phase === "done" ? (
         <div className="anim-pop flex flex-col items-center py-4 text-center">
           <div className="relative">

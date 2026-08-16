@@ -167,18 +167,30 @@ export function Avatar({ name, photo, size = 40, hue }: { name: string; photo?: 
   );
 }
 
-export function Modal({ open, onClose, title, children, tall }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; tall?: boolean }) {
+export function Modal({ open, onClose, title, children, tall, center }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; tall?: boolean; center?: boolean }) {
   if (!open) return null;
+  const head = (
+    <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
+      <div className="font-display text-[15px] font-semibold tracking-wide">{title}</div>
+      <button onClick={onClose} className="tap p-2 -mr-2 rounded-lg text-mut hover:text-ink"><IcoX size={18} /></button>
+    </div>
+  );
   return (
     <div className="fixed inset-0 z-[70]">
       <div className="absolute inset-0 bg-black/65 backdrop-blur-[2px] anim-fade" onClick={onClose} />
-      <div className={`absolute bottom-0 inset-x-0 mx-auto max-w-md ${tall ? "h-[88vh]" : "max-h-[86vh]"} overflow-hidden rounded-t-[22px] border border-line bg-deep shadow-[0_-20px_60px_rgba(0,0,0,0.6)] anim-rise flex flex-col`}>
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
-          <div className="font-display text-[15px] font-semibold tracking-wide">{title}</div>
-          <button onClick={onClose} className="tap p-2 -mr-2 rounded-lg text-mut hover:text-ink"><IcoX size={18} /></button>
+      {center ? (
+        <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-md max-h-[86vh] overflow-hidden rounded-[22px] border border-line bg-deep shadow-[0_30px_80px_rgba(0,0,0,0.7)] anim-pop flex flex-col">
+            {head}
+            <div className="overflow-y-auto hide-scroll px-5 py-5">{children}</div>
+          </div>
         </div>
-        <div className="overflow-y-auto hide-scroll px-5 py-4 safe-b grow">{children}</div>
-      </div>
+      ) : (
+        <div className={`absolute bottom-0 inset-x-0 mx-auto max-w-md ${tall ? "h-[88vh]" : "max-h-[86vh]"} overflow-hidden rounded-t-[22px] border border-line bg-deep shadow-[0_-20px_60px_rgba(0,0,0,0.6)] anim-rise flex flex-col`}>
+          {head}
+          <div className="overflow-y-auto hide-scroll px-5 py-4 safe-b grow">{children}</div>
+        </div>
+      )}
     </div>
   );
 }
