@@ -5,7 +5,7 @@ import { createMockBackend, resetMock } from "./lib/mock";
 import { createSupabaseBackend, hasSupabase } from "./lib/supabaseBackend";
 import type { Backend } from "./lib/types";
 import { fmt, timeAgo } from "./lib/types";
-import { Avatar, Button, Chip, IcoClock, IcoCoin, IcoFlame, IcoGavel, IcoGift, IcoHome, IcoInfo, IcoMega, IcoPlane, IcoRefresh, IcoShield, IcoWallet, IcoX, Modal, Spinner } from "./components/ui";
+import { Avatar, Button, Chip, IcoClock, IcoCoin, IcoFlame, IcoGavel, IcoGift, IcoHome, IcoInfo, IcoMega, IcoMoon, IcoPlane, IcoRefresh, IcoShield, IcoSun, IcoWallet, IcoX, Modal, Spinner } from "./components/ui";
 import Home from "./screens/Home";
 import Promote from "./screens/Promote";
 import Arena from "./screens/Arena";
@@ -116,7 +116,7 @@ function Shell({ backend }: { backend: Backend }) {
   );
 
   function ProfileSheet({ open, onClose, mode }: { open: boolean; onClose: () => void; mode: "mock" | "live" }) {
-    const { user, wallet, settings } = useApp();
+    const { user, wallet, settings, theme, setTheme } = useApp();
     if (!user || !wallet || !settings) return null;
     return (
       <Modal open={open} onClose={onClose} title="Profile">
@@ -133,6 +133,20 @@ function Shell({ backend }: { backend: Backend }) {
           <div className="card p-3 text-center"><div className="font-display text-[16px] font-bold gold-text tnum">{fmt(wallet.balance)}</div><div className="text-[10px] uppercase tracking-wider text-dim font-bold mt-1">Balance</div></div>
           <div className="card p-3 text-center"><div className="font-display text-[16px] font-bold text-mint tnum">{fmt(wallet.total_earned)}</div><div className="text-[10px] uppercase tracking-wider text-dim font-bold mt-1">Earned</div></div>
           <div className="card p-3 text-center"><div className="font-display text-[16px] font-bold tnum">+{fmt(wallet.today_earned)}</div><div className="text-[10px] uppercase tracking-wider text-dim font-bold mt-1">Today</div></div>
+        </div>
+
+        <div className="card mt-4 px-4 py-3 flex items-center justify-between gap-3">
+          <span className="text-[12.5px] text-mut font-semibold">Appearance</span>
+          <div className="flex rounded-xl border border-line bg-panel p-1 gap-1">
+            <button onClick={() => setTheme("dark")}
+              className={`tap flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-extrabold transition-all ${theme === "dark" ? "bg-gold/15 text-gold shadow-[inset_0_0_0_1px_rgba(255,194,75,0.4)]" : "text-dim"}`}>
+              <IcoMoon size={13} /> Dark
+            </button>
+            <button onClick={() => setTheme("light")}
+              className={`tap flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-extrabold transition-all ${theme === "light" ? "bg-gold/15 text-gold shadow-[inset_0_0_0_1px_rgba(255,194,75,0.4)]" : "text-dim"}`}>
+              <IcoSun size={13} /> Light
+            </button>
+          </div>
         </div>
 
         <div className="card divide-y divide-line/60 mt-4 overflow-hidden">

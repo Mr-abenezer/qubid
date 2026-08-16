@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type Task, type Tx } from "../lib/types";
 import { haptic, openLink } from "../lib/telegram";
-import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoLink, IcoMega, IcoPlay, IcoShield, IcoSpark, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
+import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoLink, IcoMega, IcoMoon, IcoPlay, IcoShield, IcoSpark, IcoSun, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
 import { TxRow } from "./Wallet";
 
 export default function Home() {
-  const { user, wallet, settings, tasks, ads, api, openProfile, setTab, refreshTasks, refreshAds, refreshCore } = useApp();
+  const { user, wallet, settings, tasks, ads, api, theme, setTheme, openProfile, setTab, refreshTasks, refreshAds, refreshCore } = useApp();
   const [recent, setRecent] = useState<Tx[] | null>(null);
   const [activity, setActivity] = useState(false);
   const [watch, setWatch] = useState(false);
@@ -44,6 +44,10 @@ export default function Home() {
           <div className="text-[15.5px] font-extrabold truncate">{user.first_name}</div>
           <div className="text-[12.5px] text-mut truncate">@{user.username}</div>
         </div>
+        <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle light/dark mode"
+          className="tap p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-gold transition-colors">
+          {theme === "dark" ? <IcoSun size={19} /> : <IcoMoon size={18} />}
+        </button>
         <button onClick={() => { haptic("light"); setActivity(true); }} className="tap relative p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-ink">
           <IcoBell size={19} />
           {(recent?.length ?? 0) > 0 && <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-gold" />}
