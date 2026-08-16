@@ -128,7 +128,7 @@ begin
   end if;
 
   select amount into v_last_amount from public.bids
-    where round_id = r.id order by created_at desc, id desc limit 1;
+    where round_id = r.id order by placed_at desc, id desc limit 1;
   v_min := coalesce(v_last_amount + 1, r.bid_amount);
   v_amount := coalesce(p_amount, v_min);
   if v_amount < v_min then
