@@ -91,6 +91,20 @@ Deno.serve(async (req) => {
       });
 
     // 1 · upsert the Bid X account — Telegram id is the unique key
+    // Referral: when a brand-new account arrives with ?startapp=<telegram_id>
+    // (initData.start_param), store the inviter on the row — the DB trigger
+    // users_referral_join (migration 002) credits the inviter atomically.
+    let referredBy: string | undefined;
+    const existsRes = await rest(`users?telegram_id=eq.${tid}&select=id`);
+    const exists = existsRes.ok ? ((await existsRes.json()) as { id: string }[]) : [];
+    if (exists.length === 0) {
+      const sp = String(data.start_param ?? "").replace(/[^0-9]/g, "");
+      if (sp && sp !== tid) {
+        const invRes = await rest(`users?telegram_id=eq.${sp}&select=id`);
+        const inv = invRes.ok ? ((await invRes.json()) as { id: string }[]) : [];
+        if (inv[0]?.id) referredBy = inv[0].id;
+      }
+    }
     const userRes = await rest("users?on_conflict=telegram_id&select=*", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
@@ -101,6 +115,7 @@ Deno.serve(async (req) => {
         last_name: (tuser.last_name as string) ?? null,
         photo_url: (tuser.photo_url as string) ?? null,
         language: (tuser.language_code as string) ?? null,
+        ...(referredBy ? { referred_by: referredBy } : {}),
       }),
     });
     if (!userRes.ok) return json({ error: "User upsert failed", detail: await userRes.text() }, 500);

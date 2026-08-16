@@ -20,7 +20,8 @@ withdraw Coins to **USDT · BEP20** — with a full admin panel.
 | Mini App frontend (React + Vite + Tailwind) | `src/` |
 | Database schema, RLS, atomic RPCs, bid engine | `supabase/migrations/001_bidx.sql` |
 | Referral program + escalating-bid ladder | `supabase/migrations/002_referrals_and_escalating_bids.sql` |
-| Telegram auth Edge Function (initData HMAC verify) | `supabase/functions/telegram-login/` |
+| Telegram auth Edge Function (initData HMAC verify + referral capture) | `supabase/functions/telegram-login/` |
+| Bot brain — answers /start, opens the mini app, forwards referral codes | `supabase/functions/telegram-bot/` |
 | Cron worker (round settlement, notifications, campaign expiry) | `supabase/functions/housekeeping/` |
 | Env template | `.env.example` |
 
@@ -83,10 +84,16 @@ Then rebuild: `npm run build`.
 
 ### 3 · Edge Functions + secrets (stay server-side)
 
-Both functions are zero-dependency — no CLI needed:
+All three functions are zero-dependency — no CLI needed:
 
 - Dashboard → **Edge Functions** → **New function** → `telegram-login` →
   paste `supabase/functions/telegram-login/index.ts` → Deploy.
+- Repeat: `telegram-bot` ← `supabase/functions/telegram-bot/index.ts`.
+  ⚠ Then open the function → **Settings → turn OFF "Verify JWT"**
+  (Telegram calls it server-to-server). Optional secret `MINI_APP_URL` =
+  your hosted app URL makes the /start button open the app instantly.
+  Activate the webhook once — open in a browser:
+  `https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<ref>.supabase.co/functions/v1/telegram-bot&allowed_updates=%5B%22message%22%5D`
 - Repeat: `housekeeping` ← `supabase/functions/housekeeping/index.ts`.
 - **Edge Functions → Secrets** (both):
   - `TELEGRAM_BOT_TOKEN` = your bot token (`8073660163:AAE...`)
