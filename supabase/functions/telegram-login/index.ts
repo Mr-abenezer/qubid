@@ -9,7 +9,7 @@
 //   Dashboard → Edge Functions → "New function" → name: telegram-login
 //   → replace the code with this file → Deploy
 // Then: Dashboard → Edge Functions → Secrets → add:
-//   TELEGRAM_BOT_TOKEN        = 8073660163:AAEyc-DmLQk16CaSSMjIfOg6OHsXfqxPGT8
+//   TELEGRAM_BOT_TOKEN      = your bot token (from @BotFather — NEVER commit it)
 //   SERVICE_ROLE_KEY        = <the service_role key from Project Settings → API>
 // (SUPABASE_URL is injected automatically.)
 

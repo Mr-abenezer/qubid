@@ -86,16 +86,24 @@ Deno.serve(async (req) => {
       const payload = isStart ? (text.split(/\s+/)[1] ?? "").replace(/[^0-9]/g, "") : "";
       const name = msg.from?.first_name ? msg.from.first_name.replace(/[<>&]/g, "") : "earner";
 
-      await api("sendMessage", {
+      const res = await api("sendMessage", {
         chat_id: msg.chat.id,
         text: isStart || isHelp ? welcomeText(name, isStart && !!payload) : hintText(),
         parse_mode: "HTML",
         disable_web_page_preview: true,
         reply_markup: keyboard(isStart ? payload : ""),
       });
+      if (!res || !res.ok) {
+        // visible in Edge Functions → Logs — the #1 debug surface
+        const detail = res ? await res.text().catch(() => "") : "no response from Telegram";
+        console.error(`sendMessage failed (${res?.status ?? "?"})`, detail.slice(0, 300));
+      } else {
+        console.log(`replied to ${msg.chat.id}`);
+      }
     }
-  } catch {
-    /* never throw — Telegram would retry the same update forever */
+  } catch (e) {
+    // never throw — Telegram would retry the same update forever — but log it
+    console.error("bot handler error", String(e));
   }
 
   // always 200: a non-2xx makes Telegram re-deliver the update
