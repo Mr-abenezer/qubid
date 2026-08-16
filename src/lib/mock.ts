@@ -386,6 +386,16 @@ export function createMockBackend(): Backend {
     async completeAd(adId, source) {
       await d(350);
       const u = meU();
+      // generic rewarded-video slot (AdsGram) — pays the standard ad reward
+      if (source === "ad" && adId === "reward-ad") {
+        const today = iso(now()).slice(0, 10);
+        const todayCount = (db.txs[db.me] ?? []).filter((t) => t.created_at.slice(0, 10) === today && (t.type === "ad_reward" || t.type === "click_reward")).length;
+        if (todayCount >= db.settings.daily_ad_limit) return fail("Daily ad limit reached — come back tomorrow");
+        const tx = credit(db.me, db.settings.ad_reward, "ad_reward", "Watch Ad reward");
+        commission(db.me, "Watch Ad — friend activity");
+        emit();
+        return ok({ reward: tx.amount, balance: meU().balance });
+      }
       if (source === "campaign") {
         const c = db.campaigns.find((x) => x.id === adId);
         if (!c || c.status !== "active") return fail("Campaign is no longer active");
@@ -449,6 +459,7 @@ export function createMockBackend(): Backend {
       const u = meU();
       const s = db.settings;
       if (input.budget < s.min_campaign_budget) return fail(`Minimum budget is ${s.min_campaign_budget} Coins`);
+      if (input.budget > 100000) return fail("Maximum campaign budget is 100,000 Coins");
       if (u.balance < input.budget) return fail("Insufficient balance");
       credit(db.me, -input.budget, "campaign_deposit", `Campaign budget — ${input.title}`);
       // No approval gate — the campaign is live on every Home screen immediately.
@@ -489,7 +500,7 @@ export function createMockBackend(): Backend {
       if (!c) return fail("Campaign not found");
       if (["completed", "rejected", "refunded"].includes(c.status)) return fail("This campaign is finished");
       const newBudget = Math.max(Math.floor(budget), c.spent, db.settings.min_campaign_budget);
-      if (newBudget > 50000) return fail("Maximum campaign budget is 50,000 Coins");
+      if (newBudget > 100000) return fail("Maximum campaign budget is 100,000 Coins");
       const delta = newBudget - c.budget;
       if (delta !== 0) credit(db.me, -delta, "campaign_deposit", `Budget updated — ${c.title}`);
       c.budget = newBudget;

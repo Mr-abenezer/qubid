@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type Task, type Tx } from "../lib/types";
 import { haptic, openLink } from "../lib/telegram";
-import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoLink, IcoMega, IcoPlay, IcoShield, IcoSpark, Modal, Ring, SectionH, Spinner } from "../components/ui";
+import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoLink, IcoMega, IcoPlay, IcoShield, IcoSpark, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
 import { TxRow } from "./Wallet";
 
 export default function Home() {
@@ -116,7 +116,7 @@ export default function Home() {
                     <div className="grow" />
                     {done
                       ? <Chip tone="mint"><IcoCheck size={12} /> Done</Chip>
-                      : <Button size="sm" onClick={() => { haptic("medium"); openLink(a.url); setAd(a); }}><IcoEye size={14} /> Open</Button>}
+                      : <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoUpR size={14} /> Open</Button>}
                   </div>
                 </div>
               </div>
@@ -175,17 +175,27 @@ export default function Home() {
 /* ── Watch Ad flow — AdsGram reward ad will plug in here ──────────────────── */
 function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: () => void; onReward: () => void }) {
   const { api, toast, setWalletBalance } = useApp();
-  const [phase, setPhase] = useState<"ready" | "watch" | "claim" | "done">("ready");
+  const [phase, setPhase] = useState<"ready" | "watch" | "crediting" | "done">("ready");
+  const [got, setGot] = useState(reward);
   const [deadline] = useState(() => new Date(Date.now() + 5000).toISOString());
-  const [busy, setBusy] = useState(false);
+  const settled = useRef(false);
 
-  const claim = async () => {
-    setBusy(true);
+  useEffect(() => {
+    if (phase !== "done") return;
+    const t = setTimeout(onClose, 1600);
+    return () => clearTimeout(t);
+  }, [phase, onClose]);
+
+  // Coins are credited automatically the moment the timer ends — no claim tap
+  const settle = async () => {
+    if (settled.current) return;
+    settled.current = true;
+    setPhase("crediting");
     const res: ActionResult = await api.completeAd("reward-ad", "ad").catch((e): ActionResult => ({ ok: false, error: String(e) }));
-    setBusy(false);
     if (!res.ok) { toast(res.error ?? "Could not claim reward", "err"); onClose(); return; }
     haptic("success");
     if (res.balance !== undefined) setWalletBalance(res.balance);
+    setGot(res.reward ?? reward);
     setPhase("done");
     toast(`+${res.reward ?? reward} Coins earned`, "ok");
     onReward();
@@ -195,30 +205,31 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
     <Modal open onClose={onClose} title={phase === "done" ? "Reward credited" : "Watch Ad"} center>
       <div className="flex flex-col items-center text-center">
         {phase === "done" ? (
-          <div className="anim-pop flex flex-col items-center py-4">
+          <div className="anim-pop flex flex-col items-center py-5">
             <div className="relative">
               <span className="text-gold"><IcoCoin size={64} /></span>
               <span className="absolute -top-2 -right-4 text-gold anim-float"><IcoSpark size={20} /></span>
               <span className="absolute -bottom-1 -left-5 text-gold/70 anim-float" style={{ animationDelay: "0.6s" }}><IcoSpark size={14} /></span>
             </div>
-            <div className="font-display text-[30px] font-bold gold-text glow-gold mt-4">+{reward}</div>
-            <div className="text-[13px] text-mut mt-1">Coins added to your balance</div>
-            <Button className="mt-5" full onClick={onClose}>Keep earning</Button>
+            <div className="font-display text-[32px] font-bold gold-text glow-gold mt-4">+{got}</div>
+            <div className="text-[13px] text-mut mt-1">Coins added to your balance automatically</div>
+          </div>
+        ) : phase === "crediting" ? (
+          <div className="flex flex-col items-center py-9">
+            <Spinner size={26} className="text-gold" />
+            <div className="text-[13.5px] font-bold mt-3">Adding your Coins…</div>
           </div>
         ) : (
           <>
             <div className="my-2">
-              <Ring deadline={deadline} totalSec={5} size={150} onExpire={() => { setPhase("claim"); haptic("medium"); }} />
+              <Ring deadline={deadline} totalSec={5} size={150} onExpire={() => { haptic("medium"); settle(); }} />
             </div>
             {phase === "ready" && (
               <Button size="lg" full onClick={() => { setPhase("watch"); haptic("medium"); }}>
                 <IcoPlay size={18} /> Watch · +{reward} Coins
               </Button>
             )}
-            {phase === "watch" && <Chip tone="dim"><IcoClock size={12} /> Watching…</Chip>}
-            {phase === "claim" && (
-              <ClaimButton busy={busy} reward={reward} onClick={claim} />
-            )}
+            {phase === "watch" && <Chip tone="dim"><IcoClock size={12} /> Verifying — Coins land automatically…</Chip>}
           </>
         )}
       </div>
@@ -229,66 +240,68 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
 /* ── Live ad flow (campaigns published in Promote — instant payout) ────────── */
 function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDone: () => void }) {
   const { api, toast, setWalletBalance } = useApp();
-  const [phase, setPhase] = useState<"ready" | "watch" | "claim" | "done">("ready");
-  const [deadline, setDeadline] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const totalSec = Math.max(3, a.required_seconds);
+  const [phase, setPhase] = useState<"verify" | "crediting" | "done">("verify");
+  const [got, setGot] = useState(a.reward);
+  const [deadline] = useState(() => new Date(Date.now() + totalSec * 1000).toISOString());
+  const settled = useRef(false);
 
-  const start = () => {
-    haptic("light");
-    openLink(a.url);
-    setDeadline(new Date(Date.now() + Math.max(3, a.required_seconds) * 1000).toISOString());
-    setPhase("watch");
-  };
+  // the destination loads immediately — no confirmation step
+  useEffect(() => { haptic("light"); openLink(a.url); }, [a.url]);
 
-  const claim = async () => {
-    setBusy(true);
+  useEffect(() => {
+    if (phase !== "done") return;
+    const t = setTimeout(onClose, 1600);
+    return () => clearTimeout(t);
+  }, [phase, onClose]);
+
+  // Coins are credited automatically the moment the timer ends — nothing to claim
+  const settle = async () => {
+    if (settled.current) return;
+    settled.current = true;
+    setPhase("crediting");
     const res: ActionResult = await api.completeAd(a.id, a.source).catch((e): ActionResult => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
-    setBusy(false);
-    if (!res.ok) { toast(res.error ?? "Could not claim reward", "err"); onClose(); return; }
+    if (!res.ok) { toast(res.error ?? "Could not verify this view", "err"); onClose(); return; }
     haptic("success");
     if (res.balance !== undefined) setWalletBalance(res.balance);
+    setGot(res.reward ?? a.reward);
     setPhase("done");
-    toast(`+${res.reward ?? a.reward} Coins earned`, "ok");
+    toast(`+${res.reward ?? a.reward} Coins — view verified`, "ok");
     onDone();
   };
 
   return (
     <Modal open onClose={onClose} title={a.title} center>
       {phase === "done" ? (
-        <div className="anim-pop flex flex-col items-center py-4 text-center">
+        <div className="anim-pop flex flex-col items-center py-6 text-center">
           <div className="relative">
             <span className="text-mint"><IcoCoin size={64} /></span>
             <span className="absolute -top-2 -right-4 text-gold anim-float"><IcoSpark size={20} /></span>
+            <span className="absolute -bottom-1 -left-5 text-gold/70 anim-float" style={{ animationDelay: "0.5s" }}><IcoSpark size={13} /></span>
           </div>
-          <div className="font-display text-[30px] font-bold text-mint mt-4">+{a.reward}</div>
-          <div className="text-[13px] text-mut mt-1">View verified — Coins added to your balance</div>
-          <Button className="mt-5" full onClick={onClose}>Keep earning</Button>
+          <div className="font-display text-[32px] font-bold text-mint mt-4">+{got}</div>
+          <div className="text-[13px] text-mut mt-1">View verified — Coins added automatically</div>
+        </div>
+      ) : phase === "crediting" ? (
+        <div className="flex flex-col items-center py-9">
+          <Spinner size={26} className="text-gold" />
+          <div className="text-[13.5px] font-bold mt-3">Adding your Coins…</div>
         </div>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-[13.5px] text-mut leading-relaxed grow">{a.description}</p>
-            <Chip tone="mint" className="shrink-0"><IcoCoin size={12} /> +{a.reward}</Chip>
+          <div className="flex justify-center">
+            <Ring deadline={deadline} totalSec={totalSec} size={150} onExpire={() => { haptic("medium"); settle(); }} />
           </div>
-          <div className="flex gap-1.5 mt-3 flex-wrap">
-            <Chip tone={a.source === "campaign" ? "gold" : "tg"}>
-              {a.source === "campaign" ? <><IcoMega size={12} /> Community</> : <><IcoSpark size={12} /> Sponsored</>}
-            </Chip>
-            <Chip tone="dim"><IcoClock size={12} /> {Math.max(3, a.required_seconds)}s view</Chip>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <Chip tone="mint"><IcoCoin size={12} /> +{a.reward}</Chip>
+            <Chip tone="dim"><IcoEye size={12} /> Verifying your view…</Chip>
           </div>
-
-          {phase === "ready" && (
-            <Button variant="sky" full size="lg" className="mt-4" onClick={start}>
-              <IcoLink size={17} /> Open link & start timer
-            </Button>
-          )}
-          {phase === "watch" && deadline && (
-            <div className="flex flex-col items-center mt-4">
-              <Ring deadline={deadline} totalSec={Math.max(3, a.required_seconds)} size={130} onExpire={() => { setPhase("claim"); haptic("medium"); }} />
-              <Chip tone="dim" className="mt-3"><IcoEye size={12} /> Keep the page open — verifying your view…</Chip>
-            </div>
-          )}
-          {phase === "claim" && <ClaimButton busy={busy} reward={a.reward} onClick={claim} />}
+          <p className="text-[12.5px] text-dim text-center mt-2.5 leading-relaxed">
+            Coins are added automatically when the timer ends — nothing to claim.
+          </p>
+          <button onClick={() => { haptic("light"); openLink(a.url); }} className="tap mx-auto mt-3.5 flex items-center gap-1.5 text-[12.5px] font-bold text-sky hover:text-ink transition-colors">
+            <IcoUpR size={14} /> Reopen destination
+          </button>
         </>
       )}
     </Modal>

@@ -30,7 +30,7 @@ begin
   if p_budget < (public.get_setting('min_campaign_budget'))::int then
     raise exception 'Minimum campaign budget is % Coins', public.get_setting('min_campaign_budget');
   end if;
-  if p_budget > 50000 then raise exception 'Maximum campaign budget is 50,000 Coins'; end if;
+  if p_budget > 100000 then raise exception 'Maximum campaign budget is 100,000 Coins'; end if;
   v_balance := public.adjust_balance(u.id, -p_budget, 'campaign_deposit', 'Campaign budget — ' || p_title);
   -- status is 'active' straight away: the ad is live on Home the second it is paid for
   insert into public.campaigns(user_id, title, description, url, image_url, budget, cpc, max_clicks, ends_at, status)
@@ -160,7 +160,7 @@ begin
   if c.status in ('completed', 'rejected', 'refunded') then raise exception 'This campaign is finished'; end if;
   -- never below what is already spent, never above the 50k cap
   v_new := greatest(coalesce(p_budget, 0), c.spent, (public.get_setting('min_campaign_budget'))::int);
-  if v_new > 50000 then raise exception 'Maximum campaign budget is 50,000 Coins'; end if;
+  if v_new > 100000 then raise exception 'Maximum campaign budget is 100,000 Coins'; end if;
   v_delta := v_new - c.budget;
   v_balance := (select balance from public.wallets where user_id = c.user_id);
   if v_delta <> 0 then

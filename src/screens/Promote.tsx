@@ -4,7 +4,7 @@ import { fmt, timeAgo, type ActionResult, type Campaign } from "../lib/types";
 import { haptic } from "../lib/telegram";
 import { Bar, Button, Chip, Empty, Field, IcoBolt, IcoCoin, IcoEye, IcoLink, IcoMega, IcoPause, IcoPlay, IcoX, Modal, Pill } from "../components/ui";
 
-const MAX_BUDGET = 50000;
+const MAX_BUDGET = 100000;
 
 export default function Promote() {
   const { wallet, settings, api, toast, setWalletBalance, refreshCore } = useApp();
