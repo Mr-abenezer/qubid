@@ -32,6 +32,7 @@ export default function Wallet() {
   const [filter, setFilter] = useState("all");
   const [coins, setCoins] = useState("");
   const [address, setAddress] = useState("");
+  const [network, setNetwork] = useState<"BEP20" | "Telebirr">("BEP20");
   const [busy, setBusy] = useState(false);
 
   const load = () => {
@@ -55,16 +56,25 @@ export default function Wallet() {
           : t.type === "bid_payment" || t.type === "bid_winnings"
   );
 
+  const addrOk = network === "Telebirr"
+    ? /^09\d{8}$/.test(address.trim())
+    : /^0x[a-fA-F0-9]{40}$/.test(address.trim());
+
   const submit = async () => {
     if (coinsNum < min) { toast(`Minimum withdrawal is ${fmt(min)} Coins`, "err"); haptic("error"); return; }
     if (coinsNum > wallet.balance) { toast("That's more than your balance", "err"); haptic("error"); return; }
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address.trim())) { toast("Enter a valid BEP20 address (starts with 0x, 42 characters)", "err"); haptic("error"); return; }
+    if (network === "Telebirr" && !/^09\d{8}$/.test(address.trim())) {
+      toast("Enter a valid Telebirr number — 09 followed by 8 digits", "err"); haptic("error"); return;
+    }
+    if (network === "BEP20" && !/^0x[a-fA-F0-9]{40}$/.test(address.trim())) {
+      toast("Enter a valid BEP20 address (starts with 0x, 42 characters)", "err"); haptic("error"); return;
+    }
     setBusy(true);
-    const res: ActionResult = await api.requestWithdrawal(coinsNum, address.trim(), "BEP20").catch((e): ActionResult => ({ ok: false, error: String(e) }));
+    const res: ActionResult = await api.requestWithdrawal(coinsNum, address.trim(), network).catch((e): ActionResult => ({ ok: false, error: String(e) }));
     setBusy(false);
     if (!res.ok) { toast(res.error ?? "Withdrawal failed", "err"); haptic("error"); return; }
     haptic("success");
-    toast(`Withdrawal of ${fmt(coinsNum)} Coins submitted`, "ok");
+    toast(`Withdrawal of ${fmt(coinsNum)} Coins submitted via ${network === "Telebirr" ? "Telebirr" : "BEP20"}`, "ok");
     if (res.balance !== undefined) setWalletBalance(res.balance);
     setCoins(""); setAddress("");
     refreshCore(); load();
@@ -87,18 +97,44 @@ export default function Wallet() {
           </div>
         </div>
         <div className="text-[12px] text-dim mt-3 leading-relaxed">
-          1 Coin = {settings.coin_usdt_rate} USDT. Coins convert to USDT <b className="text-mut">only when you withdraw</b> (BEP20) — minimum {fmt(min)} Coins ({usdtOf(min, settings.coin_usdt_rate)} USDT).
+          1 Coin = {settings.coin_usdt_rate} USDT. Coins convert <b className="text-mut">only when you withdraw</b> — to USDT (BEP20) or Ethiopian Birr (Telebirr). Minimum {fmt(min)} Coins ({usdtOf(min, settings.coin_usdt_rate)} USDT).
         </div>
       </div>
 
       {/* withdraw */}
       <div className="card mt-4 p-4 anim-rise" style={{ animationDelay: "100ms" }}>
         <div className="flex items-center justify-between">
-          <div className="text-[13px] font-extrabold uppercase tracking-wider text-mut">Withdraw to USDT</div>
+          <div className="text-[13px] font-extrabold uppercase tracking-wider text-mut">Withdraw</div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-mint/35 bg-mint/10 text-mint px-2.5 py-1 text-[10.5px] font-black uppercase tracking-wider">
             <span className="w-3.5 h-3.5 rounded-full bg-mint text-[#04241a] flex items-center justify-center text-[8px] font-black">₮</span>
-            BEP20 only
+            USDT · Birr
           </span>
+        </div>
+
+        {/* payout method */}
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <button
+            onClick={() => { setNetwork("BEP20"); setAddress(""); haptic("light"); }}
+            className={`tap flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 ${network === "BEP20" ? "border-mint/50 bg-mint/10 shadow-[0_0_16px_-6px_rgba(64,224,160,0.45)]" : "border-line bg-panel hover:border-mut/40"}`}
+          >
+            <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[13px] shrink-0 ${network === "BEP20" ? "bg-mint text-[#04241a]" : "bg-panel2 text-mut"}`}>₮</span>
+            <span className="min-w-0">
+              <span className={`block text-[13px] font-extrabold leading-tight ${network === "BEP20" ? "text-mint" : "text-ink"}`}>USDT</span>
+              <span className="block text-[10.5px] text-dim font-semibold truncate">BEP20 wallet</span>
+            </span>
+          </button>
+          <button
+            onClick={() => { setNetwork("Telebirr"); setAddress(""); haptic("light"); }}
+            className={`tap flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 ${network === "Telebirr" ? "border-sky/50 bg-sky/10 shadow-[0_0_16px_-6px_rgba(78,178,255,0.45)]" : "border-line bg-panel hover:border-mut/40"}`}
+          >
+            <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${network === "Telebirr" ? "bg-sky text-[#04182a]" : "bg-panel2 text-mut"}`}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+            </span>
+            <span className="min-w-0">
+              <span className={`block text-[13px] font-extrabold leading-tight ${network === "Telebirr" ? "text-sky" : "text-ink"}`}>Telebirr</span>
+              <span className="block text-[10.5px] text-dim font-semibold truncate">Ethiopia · 09…</span>
+            </span>
+          </button>
         </div>
         <div className="mt-3">
           <div className="flex gap-2">
@@ -126,15 +162,44 @@ export default function Wallet() {
           </Chip>
         </div>
 
-        <div className="mt-3">
-          <div className="text-[12.5px] font-bold uppercase tracking-wider text-mut mb-1.5">USDT address · BEP20 (BNB Smart Chain)</div>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x…" className="input tnum" />
-          <div className="text-[11.5px] text-dim mt-1.5 leading-relaxed">
-            Payouts are sent in <b className="text-mut">USDT on BEP20</b> only. Double-check your address — other networks are not supported and funds sent there cannot be recovered.
+        {network === "Telebirr" && (
+          <div className="text-[11.5px] text-sky/90 font-semibold mt-2.5 text-center">
+            Telebirr payouts are sent in Ethiopian Birr at the current exchange rate.
           </div>
+        )}
+
+        <div className="mt-3">
+          <div className="text-[12.5px] font-bold uppercase tracking-wider text-mut mb-1.5">
+            {network === "Telebirr" ? "Telebirr phone number · Ethiopia" : "USDT address · BEP20 (BNB Smart Chain)"}
+          </div>
+          {network === "Telebirr" ? (
+            <input
+              inputMode="numeric"
+              value={address}
+              onChange={(e) => setAddress(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="09xxxxxxxx"
+              className="input tnum"
+            />
+          ) : (
+            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x…" className="input tnum" />
+          )}
+          {network === "Telebirr" ? (
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-[11.5px] text-dim leading-relaxed">
+                Format <b className="text-mut tnum">09xxxxxxxx</b> — 10 digits, starting with 09.
+              </span>
+              {address.length > 0 && (
+                <Chip tone={addrOk ? "mint" : "coral"}>{addrOk ? "valid number" : `${10 - address.length} digits left`}</Chip>
+              )}
+            </div>
+          ) : (
+            <div className="text-[11.5px] text-dim mt-1.5 leading-relaxed">
+              Payouts are sent in <b className="text-mut">USDT on BEP20</b> only. Double-check your address — other networks are not supported and funds sent there cannot be recovered.
+            </div>
+          )}
         </div>
         <Button full size="lg" className="mt-4" loading={busy} onClick={submit} disabled={coinsNum <= 0}>
-          <IcoUpR size={18} /> Withdraw {coinsNum > 0 ? `${fmt(coinsNum)} Coins` : ""}
+          <IcoUpR size={18} /> Withdraw {coinsNum > 0 ? `${fmt(coinsNum)} Coins · ${network === "Telebirr" ? "Telebirr" : "BEP20"}` : ""}
         </Button>
       </div>
 

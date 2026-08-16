@@ -24,7 +24,8 @@ export default function Home() {
 
   const availTasks = tasks.filter((t) => !t.my_status || t.my_status === "rejected");
   const adReward = settings.ad_reward ?? 5;
-  const liveAds = [...ads].sort((a, b) => (a.my_completions >= a.per_user_limit ? 1 : 0) - (b.my_completions >= b.per_user_limit ? 1 : 0));
+  // ads disappear from the feed the moment a user completes them
+  const liveAds = ads.filter((a) => a.my_completions < a.per_user_limit);
   const onReward = () => { refreshTasks(); refreshAds(); refreshCore(); };
 
   return (
@@ -91,9 +92,7 @@ export default function Home() {
       {/* live ads — campaigns published in Promote appear here instantly */}
       <SectionH title={`Live ads (${liveAds.length})`} />
       <div className="space-y-3">
-        {liveAds.map((a, i) => {
-          const done = a.my_completions >= a.per_user_limit;
-          return (
+        {liveAds.map((a, i) => (
             <div key={a.id} className="stagger card p-3.5" style={{ "--i": i } as React.CSSProperties}>
               <div className="flex items-start gap-3">
                 <span
@@ -114,19 +113,16 @@ export default function Home() {
                     </Chip>
                     {a.ends_at && <Chip tone="dim"><IcoClock size={12} /> {timeLeft(a.ends_at)}</Chip>}
                     <div className="grow" />
-                    {done
-                      ? <Chip tone="mint"><IcoCheck size={12} /> Done</Chip>
-                      : <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoUpR size={14} /> Open</Button>}
+                    <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoUpR size={14} /> Open</Button>
                   </div>
                 </div>
               </div>
             </div>
-          );
-        })}
+        ))}
         {liveAds.length === 0 && (
           <div className="card p-6 text-center">
             <div className="text-[13.5px] font-bold text-mut">No ads right now</div>
-            <div className="text-[12.5px] text-dim mt-1">Ads published in Promote land here the same second they go live.</div>
+            <div className="text-[12.5px] text-dim mt-1">Ads are removed the moment you complete them — new ones from Promote land here instantly.</div>
           </div>
         )}
       </div>
