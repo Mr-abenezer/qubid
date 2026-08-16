@@ -16,43 +16,62 @@ async function ensureSession(sb: SupabaseClient, initDataStr: string) {
   const { data } = await sb.auth.getSession();
   if (data?.session) return;
 
-  let res: Response;
+  // One full login + token-exchange round trip.
+  const attempt = async () => {
+    let res: Response;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON,
+          Authorization: `Bearer ${SUPABASE_ANON}`,
+        },
+        body: JSON.stringify({ init_data: initDataStr }),
+      });
+    } catch {
+      throw new Error(
+        "Cannot reach the telegram-login Edge Function (network/CORS). It is most likely not deployed yet — see README step 3.",
+      );
+    }
+
+    if (res.status === 404) {
+      throw new Error("telegram-login Edge Function not found (404). Deploy it: Supabase Dashboard → Edge Functions → New function → paste supabase/functions/telegram-login/index.ts.");
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      const hint =
+        res.status === 401
+          ? " Check the TELEGRAM_BOT_TOKEN secret, and reopen the app fresh from Telegram."
+          : res.status >= 500
+            ? " Check that TELEGRAM_BOT_TOKEN and SERVICE_ROLE_KEY secrets are set on the function (Edge Functions → Secrets). The secret name must not start with SUPABASE_."
+            : "";
+      throw new Error(`telegram-login failed (${res.status})${hint} ${detail.slice(0, 160)}`.trim());
+    }
+
+    const { token_hash } = await res.json();
+    if (!token_hash) throw new Error("telegram-login returned no session token.");
+    // GoTrue requires ONLY token_hash + type here — including the email
+    // makes it reject the request with "Only the token_hash and type should be provided".
+    const { error } = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
+    if (error) throw new Error(`Session exchange failed: ${error.message}`);
+  };
+
   try {
-    res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON,
-        Authorization: `Bearer ${SUPABASE_ANON}`,
-      },
-      body: JSON.stringify({ init_data: initDataStr }),
-    });
-  } catch {
-    throw new Error(
-      "Cannot reach the telegram-login Edge Function (network/CORS). It is most likely not deployed yet — see README step 3.",
-    );
+    await attempt();
+  } catch (e) {
+    // Brand-new accounts race with GoTrue: the magiclink token is minted the
+    // same instant the auth user is created, so the very first verifyOtp can
+    // land before the user row propagates → "Email link is invalid or has
+    // expired". One automatic retry (fresh token, user already exists) fixes
+    // it — exactly what tapping Retry does manually.
+    if (String((e as Error)?.message ?? "").startsWith("Session exchange failed")) {
+      await new Promise((r) => setTimeout(r, 700));
+      await attempt();
+    } else {
+      throw e;
+    }
   }
-
-  if (res.status === 404) {
-    throw new Error("telegram-login Edge Function not found (404). Deploy it: Supabase Dashboard → Edge Functions → New function → paste supabase/functions/telegram-login/index.ts.");
-  }
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    const hint =
-      res.status === 401
-        ? " Check the TELEGRAM_BOT_TOKEN secret, and reopen the app fresh from Telegram."
-        : res.status >= 500
-          ? " Check that TELEGRAM_BOT_TOKEN and SERVICE_ROLE_KEY secrets are set on the function (Edge Functions → Secrets). The secret name must not start with SUPABASE_."
-          : "";
-    throw new Error(`telegram-login failed (${res.status})${hint} ${detail.slice(0, 160)}`.trim());
-  }
-
-  const { token_hash } = await res.json();
-  if (!token_hash) throw new Error("telegram-login returned no session token.");
-  // GoTrue requires ONLY token_hash + type here — including the email
-  // makes it reject the request with "Only the token_hash and type should be provided".
-  const { error } = await sb.auth.verifyOtp({ token_hash, type: "magiclink" });
-  if (error) throw new Error(`Session exchange failed: ${error.message}`);
 }
 
 async function rpc<T = unknown>(sb: SupabaseClient, name: string, params?: Record<string, unknown>): Promise<T> {
