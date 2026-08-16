@@ -154,3 +154,35 @@ begin
   return jsonb_build_object('ok', true, 'balance', v_balance);
 end $$;
 grant execute on function public.place_bid(bigint) to authenticated;
+
+-- ── admin settings: whitelist the new referral keys ──────────────────────────
+-- Replaces 001's admin_save_settings (identical logic + 2 new keys).
+create or replace function public.admin_save_settings(p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare k text;
+begin
+  perform public.require_admin();
+  if p ? 'winner_pct' and p ? 'platform_pct' and ((p->>'winner_pct')::int + (p->>'platform_pct')::int) <> 100 then
+    raise exception 'Winner %% + platform %% must total 100';
+  end if;
+  if p ? 'coin_usdt_rate' and (p->>'coin_usdt_rate')::float8 <= 0 then
+    raise exception 'Coin rate must be positive';
+  end if;
+  if p ? 'referral_bonus' and (p->>'referral_bonus')::int < 0 then
+    raise exception 'Referral bonus cannot be negative';
+  end if;
+  if p ? 'referral_commission' and (p->>'referral_commission')::int < 0 then
+    raise exception 'Referral commission cannot be negative';
+  end if;
+  foreach k in array array['ad_reward','task_reward','click_price','click_reward','min_campaign_budget',
+    'bid_amount','bid_timer_sec','winner_pct','platform_pct','coin_usdt_rate','min_withdrawal',
+    'daily_ad_limit','referral_bonus','referral_commission','maintenance_mode','admin_telegram_id']
+  loop
+    if p ? k then
+      insert into public.platform_settings(key, value) values (k, p->>k)
+      on conflict (key) do update set value = excluded.value;
+    end if;
+  end loop;
+  perform public.audit('settings_save', '', p);
+  return jsonb_build_object('ok', true);
+end $$;
