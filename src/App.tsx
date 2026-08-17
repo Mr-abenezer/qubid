@@ -17,6 +17,35 @@ const APP_URL = ((import.meta as unknown as { env?: Record<string, string> }).en
 const previewFlag = () => new URLSearchParams(location.search).has("preview") || localStorage.getItem("bidx_preview") === "1";
 const enablePreview = () => { localStorage.setItem("bidx_preview", "1"); location.reload(); };
 
+// Drop your logo into public/logo.png (or logo.svg) and it replaces the coin
+// mark automatically on the verifying/splash screen. Falls back to the built-in
+// coin icon when the file isn't there yet.
+export function LogoMark({ size = 80 }: { size?: number }) {
+  const [src, setSrc] = useState<string | null>("/logo.png");
+  if (src === null) {
+    return (
+      <div
+        className="rounded-3xl bg-gradient-to-br from-gold to-gold2 flex items-center justify-center text-[#241a05] shadow-[0_10px_40px_-8px_rgba(255,194,75,0.6)]"
+        style={{ width: size, height: size }}
+      >
+        <IcoCoin size={size * 0.5} />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt="Bid X logo"
+      width={size}
+      height={size}
+      className="rounded-3xl object-contain select-none"
+      style={{ filter: "drop-shadow(0 10px 30px rgba(255,194,75,0.35))" }}
+      onError={() => setSrc(null)}
+      draggable={false}
+    />
+  );
+}
+
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const s = size === "lg" ? "text-[26px]" : size === "sm" ? "text-[15px]" : "text-[19px]";
   return (
@@ -250,9 +279,7 @@ function Splash() {
       <div className="relative anim-pop">
         <span className="absolute -inset-6 rounded-full border border-gold/20" style={{ animation: "radar 2s ease-out infinite" }} />
         <span className="absolute -inset-6 rounded-full border border-gold/20" style={{ animation: "radar 2s ease-out infinite", animationDelay: "0.7s" }} />
-        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-gold to-gold2 flex items-center justify-center text-[#241a05] shadow-[0_10px_40px_-8px_rgba(255,194,75,0.6)]">
-          <IcoCoin size={40} />
-        </div>
+        <LogoMark size={88} />
       </div>
       <div className="mt-6"><Logo size="lg" /></div>
       <div className="flex items-center gap-2 text-mut text-[13px] font-semibold mt-4">
