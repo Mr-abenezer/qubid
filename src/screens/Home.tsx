@@ -175,9 +175,8 @@ export default function Home() {
 /* ── Watch Ad flow — AdsGram reward ad will plug in here ──────────────────── */
 function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: () => void; onReward: () => void }) {
   const { api, toast, setWalletBalance } = useApp();
-  const [phase, setPhase] = useState<"ready" | "watch" | "crediting" | "done">("ready");
+  const [phase, setPhase] = useState<"playing" | "crediting" | "done">("playing");
   const [got, setGot] = useState(reward);
-  const [deadline] = useState(() => new Date(Date.now() + 5000).toISOString());
   const settled = useRef(false);
 
   useEffect(() => {
@@ -186,7 +185,10 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
     return () => clearTimeout(t);
   }, [phase, onClose]);
 
-  // Coins are credited automatically the moment the timer ends — no claim tap
+  // AdsGram integration point ─────────────────────────────────────────────
+  // When AdsGram is wired in, replace the direct settle() call with:
+  //   adsgram.showAd().then((completed) => { if (completed) settle(); else onClose(); });
+  // Reward crediting already happens server-side in settle() — nothing else changes.
   const settle = async () => {
     if (settled.current) return;
     settled.current = true;
@@ -201,6 +203,10 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
     onReward();
   };
 
+  useEffect(() => { haptic("medium"); settle(); /* ad completes → reward lands on its own */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Modal open onClose={onClose} title={phase === "done" ? "Reward credited" : "Watch Ad"} center>
       <div className="flex flex-col items-center text-center">
@@ -214,23 +220,16 @@ function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: 
             <div className="font-display text-[32px] font-bold gold-text glow-gold mt-4">+{got}</div>
             <div className="text-[13px] text-mut mt-1">Coins added to your balance automatically</div>
           </div>
-        ) : phase === "crediting" ? (
-          <div className="flex flex-col items-center py-9">
-            <Spinner size={26} className="text-gold" />
-            <div className="text-[13.5px] font-bold mt-3">Adding your Coins…</div>
-          </div>
         ) : (
-          <>
-            <div className="my-2">
-              <Ring deadline={deadline} totalSec={5} size={150} onExpire={() => { haptic("medium"); settle(); }} />
-            </div>
-            {phase === "ready" && (
-              <Button size="lg" full onClick={() => { setPhase("watch"); haptic("medium"); }}>
-                <IcoPlay size={18} /> Watch · +{reward} Coins
-              </Button>
-            )}
-            {phase === "watch" && <Chip tone="dim"><IcoClock size={12} /> Verifying — Coins land automatically…</Chip>}
-          </>
+          <div className="flex flex-col items-center py-6">
+            <span className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-gold/25 to-coral/15 border border-gold/35 text-gold flex items-center justify-center">
+              <IcoPlay size={28} />
+              <span className="absolute inset-0 rounded-2xl border border-gold/40" style={{ animation: "radar 1.8s ease-out infinite" }} />
+            </span>
+            <div className="text-[14px] font-extrabold mt-4">{phase === "crediting" ? "Adding your Coins…" : "Verifying ad view…"}</div>
+            <div className="text-[12.5px] text-dim mt-1">+{reward} Coins land automatically — no claim tap</div>
+            {phase === "crediting" && <Spinner size={20} className="text-gold mt-4" />}
+          </div>
         )}
       </div>
     </Modal>
