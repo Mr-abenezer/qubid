@@ -36,6 +36,10 @@ export interface Settings {
   referral_commission: number; // Coins granted per task/ad a referred friend completes
   maintenance_mode: boolean;
   admin_telegram_id?: string;
+  // manual deposits (added in migration 005 — optional for older DBs)
+  min_deposit?: number;
+  deposit_bep20_address?: string;
+  deposit_telebirr_number?: string;
 }
 
 export interface Wallet {
@@ -110,6 +114,21 @@ export interface Withdrawal {
   network: string;
   status: "pending" | "approved" | "processing" | "completed" | "rejected" | "cancelled";
   created_at: string;
+}
+
+export type DepositMethod = "BEP20" | "Telebirr";
+
+export interface Deposit {
+  id: string;
+  user_id: string;
+  method: DepositMethod;
+  coins: number;
+  amount_usdt: number | null;
+  amount_birr: number | null;
+  proof: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  user?: MiniUser; // admin view only
 }
 
 export interface BidRound {
@@ -229,6 +248,8 @@ export interface Backend {
   listTransactions(limit?: number): Promise<Tx[]>;
   requestWithdrawal(coins: number, address: string, network: string): Promise<ActionResult>;
   listMyWithdrawals(): Promise<Withdrawal[]>;
+  requestDeposit(method: DepositMethod, coins: number, proof: string): Promise<ActionResult>;
+  listMyDeposits(): Promise<Deposit[]>;
   // admin
   adminStats(): Promise<AdminStats>;
   adminUsers(q?: string): Promise<AdminUserRow[]>;
@@ -249,6 +270,8 @@ export interface Backend {
   adminRoundAction(action: "start" | "end" | "cancel", opts?: { bid_amount?: number; timer_sec?: number }): Promise<ActionResult>;
   adminWithdrawals(): Promise<(Withdrawal & { user: MiniUser })[]>;
   adminSetWithdrawal(id: string, status: string): Promise<ActionResult>;
+  adminDeposits(): Promise<Deposit[]>;
+  adminSetDeposit(id: string, status: "approved" | "rejected"): Promise<ActionResult>;
   adminGetSettings(): Promise<Settings>;
   adminSaveSettings(s: Settings): Promise<ActionResult>;
 }
@@ -294,6 +317,7 @@ export const TX_META: Record<string, { label: string; tone: "mint" | "coral" | "
   campaign_refund: { label: "Campaign refund", tone: "mint" },
   withdrawal: { label: "Withdrawal", tone: "coral" },
   withdrawal_refund: { label: "Withdrawal refund", tone: "mint" },
+  deposit: { label: "Deposit", tone: "mint" },
   admin_adjust: { label: "Admin adjustment", tone: "sky" },
   referral_bonus: { label: "Invite bonus", tone: "gold" },
   referral_commission: { label: "Friend activity bonus", tone: "mint" },

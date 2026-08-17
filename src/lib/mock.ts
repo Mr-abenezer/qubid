@@ -5,11 +5,11 @@
 
 import type {
   Ad, ActionResult, AdminStats, AdminUserRow, Backend, Bid, BidRound, Bootstrap,
-  Campaign, RoundState, Settings, Submission, Task, Tx, UserProfile, Wallet,
+  Campaign, Deposit, DepositMethod, RoundState, Settings, Submission, Task, Tx, UserProfile, Wallet,
   Withdrawal, WinnerEntry,
 } from "./types";
 
-const LS_KEY = "bidx_mock_v5";
+const LS_KEY = "bidx_mock_v6";
 const EARN_TYPES = ["ad_reward", "task_reward", "click_reward", "bid_winnings", "referral_bonus", "referral_commission"];
 const now = () => Date.now();
 const iso = (t: number) => new Date(t).toISOString();
@@ -36,6 +36,7 @@ interface Db {
   bids: (Bid & { user_id: string })[];
   winners: WinnerEntry[];
   withdrawals: (Withdrawal & { user_id: string })[];
+  deposits: Deposit[];
   referrals: { user_id: string; referred_by: string; completed: number; earned: number }[];
   settings: Settings;
   fees: number;
@@ -44,6 +45,9 @@ interface Db {
 
 const DEFAULTS: Settings = {
   ad_reward: 5, task_reward: 5, click_price: 7, click_reward: 5,
+  min_deposit: 100,
+  deposit_bep20_address: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+  deposit_telebirr_number: "0911234567",
   min_campaign_budget: 50, bid_amount: 10, bid_timer_sec: 60,
   winner_pct: 85, platform_pct: 15, coin_usdt_rate: 0.0006,
   min_withdrawal: 300, daily_ad_limit: 20,
@@ -164,6 +168,11 @@ function seed(): Db {
     ],
     withdrawals: [
       { id: "w-1", user_id: "u-me", coins: 300, usdt: 0.18, address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", network: "BEP20", status: "completed", created_at: iso(now() - 3 * day) },
+    ],
+    deposits: [
+      { id: "d-1", user_id: "u-me", method: "BEP20", coins: 500, amount_usdt: 0.3, amount_birr: null, proof: "0x9f8ae44c71b2d05f6a91e3c8b47d22a0c6f1d8e3b5a904217c3e6f88d21a4b7c", status: "approved", created_at: iso(now() - 4 * day) },
+      { id: "d-2", user_id: "u2", method: "Telebirr", coins: 1000, amount_usdt: null, amount_birr: 200, proof: "TB-88412096 (from 0912447710)", status: "pending", created_at: iso(now() - 5 * 3_600_000) },
+      { id: "d-3", user_id: "u5", method: "BEP20", coins: 2500, amount_usdt: 1.5, amount_birr: null, proof: "0x41c7e90a2f86d35b1e0aa9c47f6d28e5b3f0c19d7a4268e0f5b3c91d62a8e0f4", status: "pending", created_at: iso(now() - 2 * 3_600_000) },
     ],
     referrals: [
       { user_id: "u6", referred_by: "u-me", completed: 12, earned: 90 },
@@ -542,6 +551,27 @@ export function createMockBackend(): Backend {
 
     async listMyWithdrawals() { await d(); return db.withdrawals.filter((w) => w.user_id === db.me); },
 
+    // ── manual deposits ───────────────────────────────────────────────────
+    async requestDeposit(method: DepositMethod, coins: number, proof: string) {
+      await d(420);
+      const s = db.settings;
+      const min = s.min_deposit ?? 100;
+      if (method !== "BEP20" && method !== "Telebirr") return fail("Unknown deposit method");
+      if (coins < min) return fail(`Minimum deposit is ${min} Coins`);
+      if (coins > 10000000) return fail("Amount too large — contact support");
+      if ((proof ?? "").trim().length < 6) return fail("Enter a valid payment reference (at least 6 characters)");
+      db.deposits.unshift({
+        id: `d-${++db.seq}`, user_id: db.me, method, coins,
+        amount_usdt: method === "BEP20" ? parseFloat((coins * s.coin_usdt_rate).toFixed(4)) : null,
+        amount_birr: method === "Telebirr" ? parseFloat((coins * 0.2).toFixed(2)) : null,
+        proof: proof.trim(), status: "pending", created_at: iso(now()),
+      });
+      emit();
+      return ok({});
+    },
+
+    async listMyDeposits() { await d(); return db.deposits.filter((x) => x.user_id === db.me); },
+
     async getReferralStats() {
       await d();
       const bonus = db.settings.referral_bonus;
@@ -730,6 +760,29 @@ export function createMockBackend(): Backend {
         const u = db.users[w.user_id];
         return { ...rest, user: { id: u.id, username: u.username, first_name: u.first_name, photo_url: null } };
       });
+    },
+
+    async adminDeposits() {
+      await d();
+      return [...db.deposits]
+        .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || b.created_at.localeCompare(a.created_at))
+        .map((x) => {
+          const u = db.users[x.user_id];
+          return { ...x, user: { id: u.id, username: u.username, first_name: u.first_name, photo_url: null } };
+        });
+    },
+
+    async adminSetDeposit(id, status) {
+      await d(300);
+      const dep = db.deposits.find((x) => x.id === id);
+      if (!dep) return fail("Deposit not found");
+      if (dep.status !== "pending") return fail("This deposit was already reviewed");
+      if (status === "approved") {
+        credit(dep.user_id, dep.coins, "deposit", `Deposit via ${dep.method}`);
+      } else if (status !== "rejected") return fail("Unknown deposit status");
+      dep.status = status;
+      emit();
+      return ok({});
     },
 
     async adminSetWithdrawal(id, status) {

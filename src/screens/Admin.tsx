@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
-import { fmt, timeAgo, usdtOf, type AdminStats, type AdminUserRow, type Ad, type BidRound, type Campaign, type MiniUser, type Settings, type Submission, type Task, type Tx, type Withdrawal } from "../lib/types";
+import { fmt, timeAgo, usdtOf, type AdminStats, type AdminUserRow, type Ad, type BidRound, type Campaign, type Deposit, type MiniUser, type Settings, type Submission, type Task, type Tx, type Withdrawal } from "../lib/types";
 import { haptic } from "../lib/telegram";
-import { Avatar, Bar, Button, Chip, CopyBtn, Empty, Field, IcoBan, IcoCheck, IcoChev, IcoCoin, IcoDoc, IcoGear, IcoGavel, IcoMega, IcoPause, IcoPlay, IcoPlus, IcoRefresh, IcoSearch, IcoShield, IcoStop, IcoUsers, IcoWallet, IcoX, Modal, Pill, Spinner, Toggle } from "../components/ui";
+import { Avatar, Bar, Button, Chip, CopyBtn, Empty, Field, IcoBan, IcoCheck, IcoChev, IcoCoin, IcoDoc, IcoDownL, IcoGear, IcoGavel, IcoMega, IcoPause, IcoPlay, IcoPlus, IcoRefresh, IcoSearch, IcoShield, IcoStop, IcoUsers, IcoWallet, IcoX, Modal, Pill, Spinner, Toggle } from "../components/ui";
 import { TxRow } from "./Wallet";
 
-type ATab = "overview" | "users" | "content" | "campaigns" | "rounds" | "withdrawals" | "settings";
+type ATab = "overview" | "users" | "content" | "campaigns" | "rounds" | "withdrawals" | "deposits" | "settings";
 const TABS: { v: ATab; label: string; icon: React.ReactNode }[] = [
   { v: "overview", label: "Overview", icon: <IcoDoc size={15} /> },
   { v: "users", label: "Users", icon: <IcoUsers size={15} /> },
@@ -13,6 +13,7 @@ const TABS: { v: ATab; label: string; icon: React.ReactNode }[] = [
   { v: "campaigns", label: "Campaigns", icon: <IcoMega size={15} /> },
   { v: "rounds", label: "Bid & Win", icon: <IcoGavel size={15} /> },
   { v: "withdrawals", label: "Withdrawals", icon: <IcoWallet size={15} /> },
+  { v: "deposits", label: "Deposits", icon: <IcoDownL size={15} /> },
   { v: "settings", label: "Settings", icon: <IcoGear size={15} /> },
 ];
 
@@ -47,6 +48,7 @@ export default function Admin({ onClose }: { onClose: () => void }) {
           {tab === "campaigns" && <Campaigns />}
           {tab === "rounds" && <Rounds />}
           {tab === "withdrawals" && <Withdrawals />}
+          {tab === "deposits" && <Deposits />}
           {tab === "settings" && <SettingsTab />}
         </div>
       </div>
@@ -539,19 +541,73 @@ function Withdrawals() {
   );
 }
 
+/* ── deposits (manual top-ups: USDT BEP20 + Telebirr) ── */
+function Deposits() {
+  const { api, toast } = useApp();
+  const [rows, setRows] = useState<Deposit[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const load = useCallback(() => { api.adminDeposits().then(setRows).catch(() => setRows([])); }, [api]);
+  useEffect(load, [load]);
+  const set = async (id: string, status: "approved" | "rejected") => {
+    setBusyId(id + status);
+    const r = await api.adminSetDeposit(id, status).catch((e) => ({ ok: false as const, error: String(e) }));
+    setBusyId(null);
+    if (!r.ok) { toast(r.error ?? "Failed", "err"); return; }
+    haptic("success");
+    toast(status === "approved" ? "Deposit approved — Coins credited to the user" : "Deposit rejected — user notified", "ok");
+    load();
+  };
+  const pending = rows?.filter((r) => r.status === "pending").length ?? 0;
+  return (
+    <div className="space-y-2.5 anim-fade">
+      <div className="text-[11.5px] text-dim leading-relaxed">
+        Verify the payment on your {""}<b className="text-mut">BEP20 wallet</b> or <b className="text-mut">Telebirr</b> before approving — approving credits the Coins instantly and can't be undone.
+        {pending > 0 && <span className="text-gold font-bold"> · {pending} pending</span>}
+      </div>
+      {!rows ? <div className="skeleton h-[120px] rounded-2xl" /> : rows.map((dp) => (
+        <div key={dp.id} className="card p-3.5">
+          <div className="flex items-center gap-2.5">
+            <Avatar name={dp.user?.username ?? "?"} size={32} />
+            <div className="grow min-w-0">
+              <div className="text-[13.5px] font-extrabold truncate">@{dp.user?.username ?? "unknown"}</div>
+              <div className="text-[11px] text-dim tnum">
+                {fmt(dp.coins)} Coins · {dp.method === "Telebirr" ? `${dp.amount_birr ?? "—"} Birr` : `${dp.amount_usdt ?? "—"} USDT`} · {timeAgo(dp.created_at)}
+              </div>
+            </div>
+            <Chip tone={dp.method === "Telebirr" ? "sky" : "mint"} className="shrink-0">{dp.method}</Chip>
+            <Pill status={dp.status} />
+          </div>
+          <div className="mt-2.5 rounded-xl border border-line bg-abyss/60 p-2.5 flex items-center gap-2.5">
+            <span className="grow text-[11.5px] font-semibold text-sky tnum break-all leading-relaxed select-all">{dp.proof}</span>
+            <CopyBtn text={dp.proof} />
+          </div>
+          {dp.status === "pending" && (
+            <div className="flex gap-2 mt-2.5">
+              <Button variant="mint" size="sm" loading={busyId === dp.id + "approved"} onClick={() => set(dp.id, "approved")}><IcoCheck size={14} /> Approve · credit {fmt(dp.coins)}</Button>
+              <Button variant="danger" size="sm" loading={busyId === dp.id + "rejected"} onClick={() => set(dp.id, "rejected")}><IcoX size={14} /> Reject</Button>
+            </div>
+          )}
+        </div>
+      ))}
+      {rows?.length === 0 && <Empty icon={<IcoDownL size={20} />} title="No deposit requests" sub="When a user submits a USDT or Telebirr payment proof it queues here." />}
+    </div>
+  );
+}
+
 /* ── settings ── */
 function SettingsTab() {
   const { api, toast, refreshCore } = useApp();
   const [s, setS] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    // defaults for keys added in migration 002 (older servers may not have them yet)
+    // defaults for keys added in migrations 002/005 (older servers may not have them yet)
     api.adminGetSettings()
-      .then((x) => setS({ referral_bonus: 30, referral_commission: 5, ...(x as Partial<Settings>) } as Settings))
+      .then((x) => setS({ referral_bonus: 30, referral_commission: 5, min_deposit: 100, deposit_bep20_address: "", deposit_telebirr_number: "", ...(x as Partial<Settings>) } as Settings))
       .catch(() => setS(null));
   }, [api]);
   if (!s) return <div className="skeleton h-[300px] rounded-2xl" />;
   const num = (k: keyof Settings, v: string) => setS({ ...s, [k]: Number(v) || 0 });
+  const str = (k: keyof Settings, v: string) => setS({ ...s, [k]: v });
   const F = ({ k, label, step }: { k: keyof Settings; label: string; step?: string }) => (
     <Field label={label}><input inputMode="decimal" className="input tnum" step={step ?? "1"} value={String(s[k])} onChange={(e) => num(k, e.target.value)} /></Field>
   );
@@ -578,6 +634,17 @@ function SettingsTab() {
         </div>
         <div className="text-[11.5px] text-dim leading-relaxed mt-1">
           A referral is <b className="text-mut">validated when the friend completes their first task</b> — only then the invite bonus is paid. The commission applies to every task/ad the friend completes. Withdrawals are paid in <b className="text-mut">USDT · BEP20</b> only.
+        </div>
+      </div>
+      <div className="card p-4 mt-3">
+        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">Deposit payments</div>
+        <div className="grid grid-cols-2 gap-x-2.5">
+          <F k="min_deposit" label="Min deposit (Coins)" />
+        </div>
+        <Field label="USDT wallet · BEP20 (shown to users)"><input className="input tnum" placeholder="0x…" value={s.deposit_bep20_address ?? ""} onChange={(e) => str("deposit_bep20_address", e.target.value)} /></Field>
+        <Field label="Telebirr number · Ethiopia (shown to users)"><input inputMode="numeric" className="input tnum" placeholder="09xxxxxxxx" value={s.deposit_telebirr_number ?? ""} onChange={(e) => str("deposit_telebirr_number", e.target.value)} /></Field>
+        <div className="text-[11.5px] text-dim leading-relaxed mt-1">
+          Users top up by sending USDT or Birr to these, then submit the payment proof — you review it in the <b className="text-mut">Deposits</b> tab. Leave a field empty to hide that method.
         </div>
       </div>
       <div className="card p-4 mt-3">

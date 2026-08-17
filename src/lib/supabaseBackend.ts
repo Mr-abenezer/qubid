@@ -162,6 +162,10 @@ export function createSupabaseBackend(initDataStr: string): Backend {
       return A(sb.rpc("request_withdrawal" as never, { p_coins: coins, p_address: address, p_network: network } as never));
     },
     async listMyWithdrawals() { return rpc(sb, "list_my_withdrawals"); },
+    async requestDeposit(method, coins, proof) {
+      return withDbHint(await A(sb.rpc("request_deposit" as never, { p_method: method, p_coins: coins, p_proof: proof } as never)));
+    },
+    async listMyDeposits() { return rpc(sb, "list_my_deposits"); },
 
     async getReferralStats() {
       // Server RPC ships in supabase/migrations/002_referrals.sql — until it is
@@ -194,6 +198,10 @@ export function createSupabaseBackend(initDataStr: string): Backend {
     },
     async adminWithdrawals() { return rpc(sb, "admin_withdrawals"); },
     async adminSetWithdrawal(id, status) { return A(sb.rpc("admin_set_withdrawal" as never, { p_id: id, p_status: status } as never)); },
+    async adminDeposits() { return rpc(sb, "admin_deposits"); },
+    async adminSetDeposit(id, status) {
+      return withDbHint(await A(sb.rpc("admin_set_deposit" as never, { p_id: id, p_status: status } as never)));
+    },
     async adminGetSettings() { return rpc(sb, "admin_get_settings"); },
     async adminSaveSettings(s) { return A(sb.rpc("admin_save_settings" as never, { p: s } as never)); },
   };
