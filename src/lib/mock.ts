@@ -18,6 +18,7 @@ const day = 86_400_000;
 interface MUser {
   id: string; telegram_id: string; username: string; first_name: string; last_name: string;
   photo_url: string | null; language: string; status: string; balance: number; total_earned: number;
+  withdrawable: number; // earned Coins only — deposited Coins spend but never cash out
   created_at: string; referred_by?: string | null;
 }
 interface Db {
@@ -45,7 +46,7 @@ interface Db {
 
 const DEFAULTS: Settings = {
   ad_reward: 5, task_reward: 5, click_price: 7, click_reward: 5,
-  min_deposit: 100,
+  min_deposit: 100, deposit_bonus_pct: 10,
   deposit_bep20_address: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
   deposit_telebirr_number: "0911234567",
   min_campaign_budget: 50, bid_amount: 10, bid_timer_sec: 60,
@@ -57,14 +58,16 @@ const DEFAULTS: Settings = {
 };
 
 function bot(id: string, telegram_id: string, username: string, first_name: string, last_name: string, createdDaysAgo: number): MUser {
-  return { id, telegram_id, username, first_name, last_name, photo_url: null, language: "en", status: "active", balance: 300 + (id.length * 137) % 900, total_earned: 1500, created_at: iso(now() - createdDaysAgo * day) };
+  const bal = 300 + (id.length * 137) % 900;
+  return { id, telegram_id, username, first_name, last_name, photo_url: null, language: "en", status: "active", balance: bal, total_earned: 1500, withdrawable: bal, created_at: iso(now() - createdDaysAgo * day) };
 }
 
 function seed(): Db {
   const me: MUser = {
     id: "u-me", telegram_id: "7734124559", username: "smart_earner", first_name: "Alex",
     last_name: "Morozov", photo_url: null, language: "en", status: "active",
-    balance: 1240, total_earned: 3210, created_at: iso(now() - 12 * day),
+    // 1240 balance includes the approved 500-Coin deposit → only 740 is withdrawable
+    balance: 1240, total_earned: 3210, withdrawable: 740, created_at: iso(now() - 12 * day),
   };
   const users: Record<string, MUser> = {
     "u-me": me,
@@ -170,9 +173,9 @@ function seed(): Db {
       { id: "w-1", user_id: "u-me", coins: 300, usdt: 0.18, address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", network: "BEP20", status: "completed", created_at: iso(now() - 3 * day) },
     ],
     deposits: [
-      { id: "d-1", user_id: "u-me", method: "BEP20", coins: 500, amount_usdt: 0.3, amount_birr: null, proof: "0x9f8ae44c71b2d05f6a91e3c8b47d22a0c6f1d8e3b5a904217c3e6f88d21a4b7c", status: "approved", created_at: iso(now() - 4 * day) },
-      { id: "d-2", user_id: "u2", method: "Telebirr", coins: 1000, amount_usdt: null, amount_birr: 200, proof: "TB-88412096 (from 0912447710)", status: "pending", created_at: iso(now() - 5 * 3_600_000) },
-      { id: "d-3", user_id: "u5", method: "BEP20", coins: 2500, amount_usdt: 1.5, amount_birr: null, proof: "0x41c7e90a2f86d35b1e0aa9c47f6d28e5b3f0c19d7a4268e0f5b3c91d62a8e0f4", status: "pending", created_at: iso(now() - 2 * 3_600_000) },
+      { id: "d-1", user_id: "u-me", method: "BEP20", coins: 500, bonus_coins: 50, amount_usdt: 0.3, amount_birr: null, proof: "0x9f8ae44c71b2d05f6a91e3c8b47d22a0c6f1d8e3b5a904217c3e6f88d21a4b7c", status: "approved", created_at: iso(now() - 4 * day) },
+      { id: "d-2", user_id: "u2", method: "Telebirr", coins: 1000, bonus_coins: 100, amount_usdt: null, amount_birr: 200, proof: "TB-88412096 (from 0912447710)", status: "pending", created_at: iso(now() - 5 * 3_600_000) },
+      { id: "d-3", user_id: "u5", method: "BEP20", coins: 2500, bonus_coins: 250, amount_usdt: 1.5, amount_birr: null, proof: "0x41c7e90a2f86d35b1e0aa9c47f6d28e5b3f0c19d7a4268e0f5b3c91d62a8e0f4", status: "pending", created_at: iso(now() - 2 * 3_600_000) },
     ],
     referrals: [
       { user_id: "u6", referred_by: "u-me", completed: 12, earned: 90 },
@@ -213,7 +216,10 @@ export function createMockBackend(): Backend {
   const credit = (userId: string, amount: number, type: string, note: string): Tx => {
     const u = db.users[userId];
     u.balance += amount;
-    if (amount > 0 && EARN_TYPES.includes(type)) u.total_earned += amount;
+    const earn = amount > 0 && (EARN_TYPES.includes(type) || type === "admin_adjust");
+    if (earn) u.total_earned += amount;
+    // earnings and withdrawals move the withdrawable pool; deposits/refunds/spend do not
+    if (earn || type === "withdrawal") u.withdrawable = Math.max(0, u.withdrawable + amount);
     const tx: Tx = { id: ++db.seq, type, amount, balance_after: u.balance, note, created_at: iso(now()) };
     (db.txs[userId] ??= []).unshift(tx);
     return tx;
@@ -361,6 +367,7 @@ export function createMockBackend(): Backend {
         balance: u.balance,
         total_earned: u.total_earned,
         today_earned: txs.filter((t) => t.created_at.slice(0, 10) === today && t.amount > 0 && EARN_TYPES.includes(t.type)).reduce((s, t) => s + t.amount, 0),
+        withdrawable: u.withdrawable,
       };
       const user: UserProfile = {
         id: u.id, telegram_id: u.telegram_id, username: u.username, first_name: u.first_name,
@@ -542,6 +549,7 @@ export function createMockBackend(): Backend {
       const u = meU(); const s = db.settings;
       if (coins < s.min_withdrawal) return fail(`Minimum withdrawal is ${s.min_withdrawal} Coins`);
       if (coins > u.balance) return fail("Insufficient balance");
+      if (coins > u.withdrawable) return fail("Only earned Coins can be withdrawn — deposited Coins are for bids and promotions");
       if (!address.trim()) return fail("Enter a withdrawal address");
       credit(db.me, -coins, "withdrawal", `Withdrawal to ${network} ••••${address.slice(-4)}`);
       db.withdrawals.unshift({ id: `w-${++db.seq}`, user_id: db.me, coins, usdt: parseFloat((coins * s.coin_usdt_rate).toFixed(4)), address, network, status: "pending", created_at: iso(now()) });
@@ -560,8 +568,14 @@ export function createMockBackend(): Backend {
       if (coins < min) return fail(`Minimum deposit is ${min} Coins`);
       if (coins > 10000000) return fail("Amount too large — contact support");
       if ((proof ?? "").trim().length < 6) return fail("Enter a valid payment reference (at least 6 characters)");
+      // anti-cheat: one transaction ID backs exactly one deposit, ever
+      const norm = proof.trim().toLowerCase();
+      if (db.deposits.some((x) => x.proof.trim().toLowerCase() === norm)) {
+        return fail("This transaction ID was already used for another deposit");
+      }
+      const bonus = Math.round(coins * (s.deposit_bonus_pct ?? 0) / 100);
       db.deposits.unshift({
-        id: `d-${++db.seq}`, user_id: db.me, method, coins,
+        id: `d-${++db.seq}`, user_id: db.me, method, coins, bonus_coins: bonus,
         amount_usdt: method === "BEP20" ? parseFloat((coins * s.coin_usdt_rate).toFixed(4)) : null,
         amount_birr: method === "Telebirr" ? parseFloat((coins * 0.2).toFixed(2)) : null,
         proof: proof.trim(), status: "pending", created_at: iso(now()),
@@ -778,7 +792,10 @@ export function createMockBackend(): Backend {
       if (!dep) return fail("Deposit not found");
       if (dep.status !== "pending") return fail("This deposit was already reviewed");
       if (status === "approved") {
-        credit(dep.user_id, dep.coins, "deposit", `Deposit via ${dep.method}`);
+        // deposit type raises balance but NOT withdrawable — deposited Coins never cash out
+        const bonus = dep.bonus_coins ?? 0;
+        credit(dep.user_id, dep.coins + bonus, "deposit",
+          `Deposit via ${dep.method}${bonus > 0 ? ` (+${bonus} bonus)` : ""}`);
       } else if (status !== "rejected") return fail("Unknown deposit status");
       dep.status = status;
       emit();

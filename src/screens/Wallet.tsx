@@ -74,6 +74,7 @@ export default function Wallet() {
   const submit = async () => {
     if (coinsNum < min) { toast(`Minimum withdrawal is ${fmt(min)} Coins`, "err"); haptic("error"); return; }
     if (coinsNum > wallet.balance) { toast("That's more than your balance", "err"); haptic("error"); return; }
+    if (coinsNum > wallet.withdrawable) { toast("Only earned Coins can be withdrawn — deposited Coins are for bids & promotions", "err"); haptic("error"); return; }
     if (network === "Telebirr" && !/^09\d{8}$/.test(address.trim())) {
       toast("Enter a valid Telebirr number — 09 followed by 8 digits", "err"); haptic("error"); return;
     }
@@ -94,6 +95,8 @@ export default function Wallet() {
   // ── top-up (deposit) ───────────────────────────────────────────────────
   const dCoinsNum = Math.max(0, Math.floor(Number(dCoins) || 0));
   const minDep = settings.min_deposit ?? 100;
+  const dBonusPct = settings.deposit_bonus_pct ?? 0;
+  const dBonus = Math.round(dCoinsNum * dBonusPct / 100);
   const depAddress = (dMethod === "Telebirr" ? settings.deposit_telebirr_number : settings.deposit_bep20_address) ?? "";
   const depConfigured = depAddress.trim().length > 0;
   const dProofOk = dProof.trim().length >= (dMethod === "BEP20" ? 10 : 6);
@@ -139,8 +142,17 @@ export default function Wallet() {
             </div>
           </div>
         </div>
+        <div className="flex items-center gap-2 mt-3.5 flex-wrap">
+          <Chip tone="mint"><IcoCoin size={12} /> Withdrawable {fmt(wallet.withdrawable)}</Chip>
+          {wallet.balance - wallet.withdrawable > 0 && (
+            <Chip tone="gold">Deposited {fmt(wallet.balance - wallet.withdrawable)}</Chip>
+          )}
+        </div>
         <div className="text-[12px] text-dim mt-3 leading-relaxed">
           1 Coin = {settings.coin_usdt_rate} USDT. Coins convert <b className="text-mut">only when you withdraw</b> — to USDT (BEP20) or Ethiopian Birr (Telebirr). Minimum {fmt(min)} Coins ({usdtOf(min, settings.coin_usdt_rate)} USDT).
+        </div>
+        <div className="text-[11px] text-dim mt-1.5 leading-relaxed">
+          <b className="text-mut">Withdrawals come from earned Coins only.</b> Deposited Coins power your bids &amp; promotions but can't be cashed out.
         </div>
       </div>
 
@@ -311,13 +323,26 @@ export default function Wallet() {
             </div>
             <div className="text-right">
               <div className="text-[11px] font-bold uppercase tracking-wider text-dim">You get</div>
-              <div className="font-display text-[17px] font-bold gold-text tnum">{dCoinsNum > 0 ? fmt(dCoinsNum) : "0"} <span className="text-[12px] text-mut font-body font-bold">Coins</span></div>
+              <div className="font-display text-[17px] font-bold gold-text tnum">
+                {dCoinsNum > 0 ? fmt(dCoinsNum) : "0"}
+                {dBonus > 0 && <span className="text-mint"> +{fmt(dBonus)}</span>}
+                {" "}<span className="text-[12px] text-mut font-body font-bold">Coins</span>
+              </div>
             </div>
           </div>
           <div className="text-[10.5px] text-dim mt-1.5">
             {dMethod === "Telebirr" ? `1 Coin ≈ ${BIRR_PER_COIN} Birr · 1 USDT ≈ 180 Birr` : `1 Coin = ${settings.coin_usdt_rate} USDT · BEP20 only`}
           </div>
         </div>
+
+        {dBonusPct > 0 && (
+          <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-mint/30 bg-mint/8 px-3 py-2.5">
+            <span className="text-mint"><IcoCoin size={15} /></span>
+            <span className="text-[11.5px] font-bold text-mint leading-snug">
+              +{dBonusPct}% deposit bonus — paid together with your Coins once approved.
+            </span>
+          </div>
+        )}
 
         {/* pay to */}
         <div className="card bg-panel/70 p-3.5 mt-3">
@@ -388,9 +413,10 @@ export default function Wallet() {
             <div key={dp.id} className="px-3.5 py-3">
               <div className="flex items-center gap-2">
                 <div className="grow text-[13.5px] font-extrabold tnum">
-                  +{fmt(dp.coins)} Coins
+                  +{fmt(dp.coins)}{(dp.bonus_coins ?? 0) > 0 && <span className="text-mint"> +{fmt(dp.bonus_coins)}</span>} Coins
                   <span className="text-mut font-semibold"> · {dp.method === "Telebirr" ? `${dp.amount_birr ?? "—"} Birr` : `${dp.amount_usdt ?? "—"} USDT`}</span>
                 </div>
+                {(dp.bonus_coins ?? 0) > 0 && <Chip tone="mint" className="shrink-0">bonus</Chip>}
                 <Chip tone={dp.method === "Telebirr" ? "sky" : "mint"} className="shrink-0">{dp.method}</Chip>
                 <Pill status={dp.status} />
               </div>

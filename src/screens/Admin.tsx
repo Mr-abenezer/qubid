@@ -554,7 +554,9 @@ function Deposits() {
     setBusyId(null);
     if (!r.ok) { toast(r.error ?? "Failed", "err"); return; }
     haptic("success");
-    toast(status === "approved" ? "Deposit approved — Coins credited to the user" : "Deposit rejected — user notified", "ok");
+    const dp = rows?.find((x) => x.id === id);
+    const total = dp ? dp.coins + (dp.bonus_coins ?? 0) : 0;
+    toast(status === "approved" ? `Approved — ${fmt(total)} Coins credited (not withdrawable)` : "Deposit rejected — user notified", "ok");
     load();
   };
   const pending = rows?.filter((r) => r.status === "pending").length ?? 0;
@@ -569,7 +571,10 @@ function Deposits() {
           <div className="flex items-center gap-2.5">
             <Avatar name={dp.user?.username ?? "?"} size={32} />
             <div className="grow min-w-0">
-              <div className="text-[13.5px] font-extrabold truncate">@{dp.user?.username ?? "unknown"}</div>
+              <div className="text-[13.5px] font-extrabold truncate">
+                @{dp.user?.username ?? "unknown"}
+                {(dp.bonus_coins ?? 0) > 0 && <span className="text-mint font-bold text-[11px] ml-1.5">+{fmt(dp.bonus_coins)} bonus</span>}
+              </div>
               <div className="text-[11px] text-dim tnum">
                 {fmt(dp.coins)} Coins · {dp.method === "Telebirr" ? `${dp.amount_birr ?? "—"} Birr` : `${dp.amount_usdt ?? "—"} USDT`} · {timeAgo(dp.created_at)}
               </div>
@@ -602,7 +607,7 @@ function SettingsTab() {
   useEffect(() => {
     // defaults for keys added in migrations 002/005 (older servers may not have them yet)
     api.adminGetSettings()
-      .then((x) => setS({ referral_bonus: 30, referral_commission: 5, min_deposit: 100, deposit_bep20_address: "", deposit_telebirr_number: "", ...(x as Partial<Settings>) } as Settings))
+      .then((x) => setS({ referral_bonus: 30, referral_commission: 5, min_deposit: 100, deposit_bonus_pct: 0, deposit_bep20_address: "", deposit_telebirr_number: "", ...(x as Partial<Settings>) } as Settings))
       .catch(() => setS(null));
   }, [api]);
   if (!s) return <div className="skeleton h-[300px] rounded-2xl" />;
@@ -640,6 +645,7 @@ function SettingsTab() {
         <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">Deposit payments</div>
         <div className="grid grid-cols-2 gap-x-2.5">
           <F k="min_deposit" label="Min deposit (Coins)" />
+          <F k="deposit_bonus_pct" label="Deposit bonus (%)" />
         </div>
         <Field label="USDT wallet · BEP20 (shown to users)"><input className="input tnum" placeholder="0x…" value={s.deposit_bep20_address ?? ""} onChange={(e) => str("deposit_bep20_address", e.target.value)} /></Field>
         <Field label="Telebirr number · Ethiopia (shown to users)"><input inputMode="numeric" className="input tnum" placeholder="09xxxxxxxx" value={s.deposit_telebirr_number ?? ""} onChange={(e) => str("deposit_telebirr_number", e.target.value)} /></Field>

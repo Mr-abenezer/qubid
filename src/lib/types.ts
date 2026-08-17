@@ -38,12 +38,14 @@ export interface Settings {
   admin_telegram_id?: string;
   // manual deposits (added in migration 005 — optional for older DBs)
   min_deposit?: number;
+  deposit_bonus_pct?: number;
   deposit_bep20_address?: string;
   deposit_telebirr_number?: string;
 }
 
 export interface Wallet {
   balance: number;
+  withdrawable: number; // earned Coins only — deposited Coins can spend but never cash out
   total_earned: number;
   today_earned: number;
 }
@@ -123,6 +125,7 @@ export interface Deposit {
   user_id: string;
   method: DepositMethod;
   coins: number;
+  bonus_coins: number; // admin-set % bonus, locked in at submission, paid on approval
   amount_usdt: number | null;
   amount_birr: number | null;
   proof: string;
