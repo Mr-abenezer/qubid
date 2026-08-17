@@ -193,3 +193,7 @@ begin
   perform public.notify_user(u.id, 'earn', 'Coins earned', '+' || v_reward || ' Coins — keep going!');
   return jsonb_build_object('ok', true, 'reward', v_reward, 'balance', v_balance);
 end $$;
+
+-- ─── make PostgREST see the new functions immediately ───────────────────────
+-- without this the API can keep serving a stale schema cache for a while
+notify pgrst, 'reload schema';

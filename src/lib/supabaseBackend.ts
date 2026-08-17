@@ -89,6 +89,14 @@ export function createSupabaseBackend(initDataStr: string): Backend {
     const d = (data ?? {}) as { ok?: boolean; error?: string; balance?: number; reward?: number };
     return { ok: d.ok ?? true, error: d.error, balance: d.balance, reward: d.reward };
   };
+  // Missing RPC = the database is still on the old schema. Say what fixes it
+  // instead of leaking PostgREST jargon ("...not found... in the schema cache").
+  const withDbHint = (res: { ok: boolean; error?: string }) => {
+    if (!res.ok && /schema cache|could not find the function/i.test(res.error ?? "")) {
+      return { ...res, error: "This needs the latest database update — run migration 004 once in the Supabase SQL Editor, then retry." };
+    }
+    return res;
+  };
 
   const roundChannel = { cb: null as (() => void) | null, unsub: null as (() => void) | null };
 
@@ -113,7 +121,7 @@ export function createSupabaseBackend(initDataStr: string): Backend {
 
     async listAds() { return rpc(sb, "list_ads"); },
     async completeAd(adId, source) { return A(sb.rpc("complete_ad" as never, { p_id: adId, p_source: source } as never)); },
-    async completeRewardAd() { return A(sb.rpc("watch_reward_ad" as never)); },
+    async completeRewardAd() { return withDbHint(await A(sb.rpc("watch_reward_ad" as never))); },
     async listTasks() { return rpc(sb, "list_tasks"); },
     async submitTask(taskId, proof) {
       const r = await A(sb.rpc("submit_task" as never, { p_id: taskId, p_proof: proof } as never));
@@ -128,10 +136,10 @@ export function createSupabaseBackend(initDataStr: string): Backend {
       } as never));
     },
     async ownerCampaignAction(id, action) {
-      return A(sb.rpc("owner_campaign_action" as never, { p_id: id, p_action: action } as never));
+      return withDbHint(await A(sb.rpc("owner_campaign_action" as never, { p_id: id, p_action: action } as never)));
     },
     async ownerSetCampaignBudget(id, budget) {
-      return A(sb.rpc("owner_set_campaign_budget" as never, { p_id: id, p_budget: budget } as never));
+      return withDbHint(await A(sb.rpc("owner_set_campaign_budget" as never, { p_id: id, p_budget: budget } as never)));
     },
 
     async getRound() { return rpc(sb, "get_round"); },
