@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
-import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type LeaderboardRow, type PayoutEntry, type Task } from "../lib/types";
+import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type LeaderboardRow, type Task } from "../lib/types";
 import { haptic, openLink } from "../lib/telegram";
 import { LANGS, useLang } from "../lib/i18n";
 import { showMonetagAd, isMonetagReady } from "../lib/monetag";
@@ -14,8 +14,6 @@ export default function Home() {
   const [board, setBoard] = useState<LeaderboardRow[]>([]);
   const [task, setTask] = useState<Task | null>(null);
   const [ad, setAd] = useState<Ad | null>(null);
-  const [payouts, setPayouts] = useState<PayoutEntry[]>([]);
-  const [payoutsOpen, setPayoutsOpen] = useState(false);
   const [watchingAd, setWatchingAd] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkLoading, setSdkLoading] = useState(true);
@@ -38,14 +36,6 @@ export default function Home() {
     };
     checkSdk();
   }, []);
-
-  // public proof-of-payouts feed — refresh on load, after rewards, and every minute
-  const loadPayouts = () => api.recentPayouts().then(setPayouts).catch(() => {});
-  useEffect(() => {
-    loadPayouts();
-    const iv = setInterval(loadPayouts, 60_000);
-    return () => clearInterval(iv);
-  }, [api, wallet?.balance]);
 
   // top-10 board — refresh every minute while the leaderboard is open
   useEffect(() => {
@@ -136,9 +126,6 @@ export default function Home() {
           )}
         </button>
       </div>
-
-      {/* live proof-of-payouts ticker */}
-      <PayoutsTicker items={payouts} onOpen={() => { haptic("light"); setPayoutsOpen(true); }} />
 
       {/* coin balance */}
       <div className="card sheen mt-4 p-5 anim-rise" style={{ animationDelay: "60ms" }}>
@@ -274,7 +261,6 @@ export default function Home() {
 
       {task && <TaskModal task={task} onClose={() => setTask(null)} onDone={onReward} />}
       {ad && <AdModal ad={ad} onClose={() => setAd(null)} onDone={onReward} />}
-      <PayoutsModal open={payoutsOpen} items={payouts} onClose={() => setPayoutsOpen(false)} />
 
       <LeaderboardModal open={lbOpen} rows={board} onClose={() => setLbOpen(false)} />
     </div>
@@ -413,78 +399,6 @@ function ClaimButton({ busy, reward, onClick }: { busy: boolean; reward: number;
     <Button size="lg" full className="mt-4" loading={busy} onClick={onClick}>
       {busy ? <Spinner size={16} /> : <IcoCoin size={18} />} {tr("h.claim", { n: reward })}
     </Button>
-  );
-}
-
-/* ── public proof-of-payouts: live ticker + full feed ─────────────────────── */
-function PayoutsTicker({ items, onOpen }: { items: PayoutEntry[]; onOpen: () => void }) {
-  const { t } = useLang();
-  if (items.length === 0) return null;
-  const track = [...items, ...items]; // duplicated for a seamless loop
-  return (
-    <button onClick={onOpen} className="tap group w-full text-left card mt-4 overflow-hidden !p-0 anim-rise" style={{ animationDelay: "40ms" }}>
-      <div className="flex items-center gap-2 px-3.5 pt-2.5">
-        <span className="relative flex w-2 h-2">
-          <span className="absolute inline-flex w-full h-full rounded-full bg-mint opacity-60" style={{ animation: "pulsedot 1.4s infinite" }} />
-          <span className="relative inline-flex w-2 h-2 rounded-full bg-mint" />
-        </span>
-        <span className="text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-mut">{t("h.payouts")}</span>
-        <Chip tone="mint" className="!px-2 !py-0 !text-[9.5px]">{t("h.payoutsLive")}</Chip>
-        <span className="ml-auto text-[10.5px] font-bold text-dim group-hover:text-gold transition-colors">{t("h.payoutsTap")} →</span>
-      </div>
-      <div className="relative mt-2 overflow-hidden py-2.5" style={{ maskImage: "linear-gradient(to right, transparent, black 7%, black 93%, transparent)" }}>
-        <div className="ticker-track flex w-max gap-7">
-          {track.map((p, i) => (
-            <span key={i} className="flex items-center gap-1.5 text-[12.5px] font-bold whitespace-nowrap">
-              <span className="text-mint"><IcoUpR size={13} /></span>
-              <span className="text-ink">{p.name}</span>
-              <span className="text-mut font-semibold">{t("h.cashedOut")} · {p.detail}</span>
-              <span className="tnum text-mint">+{fmt(p.amount)} {p.unit}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function PayoutsModal({ open, items, onClose }: { open: boolean; items: PayoutEntry[]; onClose: () => void }) {
-  const { t } = useLang();
-  const { settings } = useApp();
-  const channel = (settings?.payouts_channel_url ?? "").trim();
-  return (
-    <Modal open={open} onClose={onClose} title={t("h.payouts")} tall>
-      <p className="text-[12.5px] text-mut leading-relaxed">{t("h.payoutsNote")}</p>
-      <div className="card divide-y divide-line/60 overflow-hidden mt-3">
-        {items.map((p, i) => (
-          <div key={i} className="flex items-center gap-3 px-3.5 py-3 anim-fade" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
-            <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-mint/12 border-mint/35 text-mint">
-              <IcoUpR size={16} />
-            </span>
-            <div className="grow min-w-0">
-              <div className="text-[13.5px] font-extrabold truncate">
-                {p.name}{" "}
-                <span className="text-mut font-semibold">{t("h.cashedOut")} · {p.detail}</span>
-              </div>
-              <div className="text-[11px] text-dim mt-0.5">{timeAgo(p.when)}</div>
-            </div>
-            <div className="font-display text-[15px] font-bold tnum shrink-0 text-mint">
-              +{fmt(p.amount)} <span className="text-[11px] text-mut font-body font-bold">{p.unit}</span>
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && <div className="p-6 text-center text-[13px] text-dim">{t("h.payoutsEmpty")}</div>}
-      </div>
-      {channel && (
-        <div className="card mt-3 p-4 border-tg/35">
-          <div className="text-[13px] font-extrabold flex items-center gap-2"><IcoPlane size={15} className="text-tg" /> {t("h.channel")}</div>
-          <p className="text-[12px] text-mut mt-1 leading-relaxed">{t("h.channelSub")}</p>
-          <Button variant="sky" full className="mt-3" onClick={() => { haptic("light"); openLink(channel); }}>
-            <IcoPlane size={16} /> {t("h.openChannel")}
-          </Button>
-        </div>
-      )}
-    </Modal>
   );
 }
 
