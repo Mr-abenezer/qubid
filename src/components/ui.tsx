@@ -85,6 +85,9 @@ export const IcoGift = (p: IP) => (
 export const IcoCopy = (p: IP) => (
   <Svg {...p}><rect x="8.5" y="8.5" width="12" height="12" rx="2.2" /><path d="M15.5 5.3v-.5a2.3 2.3 0 0 0-2.3-2.3H5.8a2.3 2.3 0 0 0-2.3 2.3v7.4a2.3 2.3 0 0 0 2.3 2.3h.5" /></Svg>
 );
+export const IcoGlobe = (p: IP) => (
+  <Svg {...p}><circle cx="12" cy="12" r="9.2" /><path d="M2.8 12h18.4M12 2.8c-2.8 2.6-4.2 5.6-4.2 9.2s1.4 6.6 4.2 9.2c2.8-2.6 4.2-5.6 4.2-9.2S14.8 5.4 12 2.8z" /></Svg>
+);
 export const IcoSun = (p: IP) => (
   <Svg {...p}><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19" /></Svg>
 );
@@ -159,10 +162,12 @@ export function Pill({ status }: { status: string }) {
   return <Chip tone={m.tone}>{m.label}</Chip>;
 }
 
-export function Avatar({ name, photo, size = 40, hue }: { name: string; photo?: string | null; size?: number; hue?: number }) {
-  const h = hue ?? ((name.charCodeAt(0) || 65) * 7 + (name.charCodeAt(1) || 0) * 13) % 360;
-  const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-  if (photo) return <img src={photo} alt={name} style={{ width: size, height: size }} className="rounded-full object-cover border border-line2" />;
+export function Avatar({ name, photo, size = 40, hue }: { name: string | null | undefined; photo?: string | null; size?: number; hue?: number }) {
+  // Telegram usernames are optional — a null name must never crash the tree.
+  const n = (name ?? "").trim() || "?";
+  const h = hue ?? ((n.charCodeAt(0) || 65) * 7 + (n.charCodeAt(1) || 0) * 13) % 360;
+  const initials = n.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() || "?";
+  if (photo) return <img src={photo} alt={n} style={{ width: size, height: size }} className="rounded-full object-cover border border-line2" />;
   return (
     <div style={{ width: size, height: size, fontSize: size * 0.36, background: `linear-gradient(140deg, hsl(${h} 60% 42%), hsl(${(h + 50) % 360} 65% 30%))` }}
       className="rounded-full flex items-center justify-center font-extrabold text-white/90 border border-white/15 shrink-0">

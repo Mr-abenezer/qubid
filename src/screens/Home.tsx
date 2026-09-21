@@ -1,20 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
-import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type Task, type Tx } from "../lib/types";
+import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type LeaderboardRow, type PayoutEntry, type Task } from "../lib/types";
 import { haptic, openLink } from "../lib/telegram";
-import { Button, Chip, CountUp, IcoBell, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoLink, IcoMega, IcoMoon, IcoPlay, IcoShield, IcoSpark, IcoSun, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
-import { TxRow } from "./Wallet";
+import { LANGS, useLang } from "../lib/i18n";
+import { showMonetagAd, isMonetagReady } from "../lib/monetag";
+import { Avatar, Button, Chip, CountUp, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoGlobe, IcoLink, IcoMega, IcoMoon, IcoPlane, IcoPlay, IcoShield, IcoSpark, IcoSun, IcoTrophy, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
 
 export default function Home() {
-  const { user, wallet, settings, tasks, ads, api, theme, setTheme, openProfile, setTab, refreshTasks, refreshAds, refreshCore } = useApp();
-  const [recent, setRecent] = useState<Tx[] | null>(null);
-  const [activity, setActivity] = useState(false);
-  const [watch, setWatch] = useState(false);
+  const { user, wallet, settings, tasks, ads, api, theme, setTheme, openProfile, setTab, toast, refreshTasks, refreshAds, refreshCore, setWalletBalance } = useApp();
+  const { t: tr, lang, setLang } = useLang();
+  const [langOpen, setLangOpen] = useState(false);
+  const [lbOpen, setLbOpen] = useState(false);
+  const [board, setBoard] = useState<LeaderboardRow[]>([]);
   const [task, setTask] = useState<Task | null>(null);
   const [ad, setAd] = useState<Ad | null>(null);
+  const [payouts, setPayouts] = useState<PayoutEntry[]>([]);
+  const [payoutsOpen, setPayoutsOpen] = useState(false);
+  const [watchingAd, setWatchingAd] = useState(false);
 
+  // public proof-of-payouts feed — refresh on load, after rewards, and every minute
+  const loadPayouts = () => api.recentPayouts().then(setPayouts).catch(() => {});
   useEffect(() => {
-    api.listTransactions(6).then(setRecent).catch(() => setRecent([]));
+    loadPayouts();
+    const iv = setInterval(loadPayouts, 60_000);
+    return () => clearInterval(iv);
+  }, [api, wallet?.balance]);
+
+  // top-10 board — refresh every minute while the leaderboard is open
+  useEffect(() => {
+    api.leaderboard().then(setBoard).catch(() => {});
+    const iv = setInterval(() => api.leaderboard().then(setBoard).catch(() => {}), 60_000);
+    return () => clearInterval(iv);
   }, [api, wallet?.balance]);
 
   useEffect(() => { refreshTasks(); }, [refreshTasks]);
@@ -27,6 +43,39 @@ export default function Home() {
   // ads disappear from the feed the moment a user completes them
   const liveAds = ads.filter((a) => a.my_completions < a.per_user_limit);
   const onReward = () => { refreshTasks(); refreshAds(); refreshCore(); };
+  const myRank = board.find((r) => r.me)?.rank ?? 0;
+
+  const handleWatchAd = async () => {
+    if (watchingAd) return;
+    if (!isMonetagReady()) {
+      toast(tr("h.adNotReady"), "err");
+      return;
+    }
+    setWatchingAd(true);
+    haptic("medium");
+    try {
+      await showMonetagAd();
+      // User watched the ad to completion - credit the reward
+      const res = await api.completeRewardAd();
+      if (res.ok) {
+        if (res.balance !== undefined) {
+          setWalletBalance(res.balance);
+        }
+        toast(tr("h.rewardCredited", { n: adReward }), "ok");
+        haptic("success");
+        onReward();
+      } else {
+        toast(res.error || tr("h.rewardFailed"), "err");
+        haptic("error");
+      }
+    } catch (error) {
+      // User skipped or error occurred
+      toast(tr("h.adSkipped"), "info");
+      haptic("light");
+    } finally {
+      setWatchingAd(false);
+    }
+  };
 
   return (
     <div className="px-4 pt-4 pb-2">
@@ -44,57 +93,76 @@ export default function Home() {
           <div className="text-[15.5px] font-extrabold truncate">{user.first_name}</div>
           <div className="text-[12.5px] text-mut truncate">@{user.username}</div>
         </div>
+        <button onClick={() => { haptic("light"); setLangOpen(true); }} aria-label={tr("pr.language")}
+          className="tap relative p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-sky transition-colors">
+          <IcoGlobe size={19} />
+          <span className="absolute -bottom-0.5 -right-0.5 rounded-md bg-sky text-[#04182a] text-[7.5px] font-black uppercase px-1 leading-[11px] shadow-[0_2px_8px_rgba(78,178,255,0.5)]">{lang}</span>
+        </button>
         <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle light/dark mode"
           className="tap p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-gold transition-colors">
           {theme === "dark" ? <IcoSun size={19} /> : <IcoMoon size={18} />}
         </button>
-        <button onClick={() => { haptic("light"); setActivity(true); }} className="tap relative p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-ink">
-          <IcoBell size={19} />
-          {(recent?.length ?? 0) > 0 && <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-gold" />}
+        <button onClick={() => { haptic("light"); setLbOpen(true); }} aria-label={tr("h.leaderboard")} className="tap relative p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-gold transition-colors">
+          <IcoTrophy size={19} />
+          {myRank > 0 && myRank <= 10 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-gold text-[#241a05] text-[9px] font-black flex items-center justify-center leading-none shadow-[0_2px_8px_rgba(255,194,75,0.55)] tnum">
+              {myRank}
+            </span>
+          )}
         </button>
       </div>
+
+      {/* live proof-of-payouts ticker */}
+      <PayoutsTicker items={payouts} onOpen={() => { haptic("light"); setPayoutsOpen(true); }} />
 
       {/* coin balance */}
       <div className="card sheen mt-4 p-5 anim-rise" style={{ animationDelay: "60ms" }}>
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-mut">Coin balance</div>
+            <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-mut">{tr("h.coinBal")}</div>
             <div className="flex items-center gap-2.5 mt-2">
               <span className="text-gold"><IcoCoin size={30} /></span>
               <span className="font-display text-[34px] leading-none font-bold glow-gold"><CountUp value={wallet.balance} /></span>
             </div>
           </div>
           <button onClick={() => setTab("wallet")} className="tap mt-1 px-3.5 py-2 rounded-xl bg-gold text-[#241a05] text-[13px] font-extrabold shadow-[0_6px_18px_-6px_rgba(255,194,75,0.55)]">
-            Withdraw
+            {tr("w.withdraw")}
           </button>
         </div>
         <div className="flex gap-2 mt-4">
-          <Chip tone="mint">Today +{fmt(wallet.today_earned)}</Chip>
-          <Chip tone="gold">Total earned {fmt(wallet.total_earned)}</Chip>
+          <Chip tone="mint">{tr("h.today", { n: fmt(wallet.today_earned) })}</Chip>
+          <Chip tone="gold">{tr("h.total", { n: fmt(wallet.total_earned) })}</Chip>
         </div>
       </div>
 
-      {/* watch ad — reward ad (AdsGram integration point) */}
+      {/* watch ad — Monetag rewarded interstitial */}
       <div className="holo-border mt-4 anim-rise" style={{ animationDelay: "120ms" }}>
         <div className="holo-inner p-4 flex items-center gap-3.5">
           <span className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-gold/25 to-coral/15 border border-gold/35 text-gold flex items-center justify-center shrink-0">
             <IcoPlay size={22} />
           </span>
           <button
-            onClick={() => { haptic("medium"); setWatch(true); }}
-            className="tap grow flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[15.5px] px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter]"
+            onClick={handleWatchAd}
+            disabled={watchingAd}
+            className="tap grow flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[15.5px] px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <IcoPlay size={18} />
-            Watch Ad
-            <span className="flex items-center gap-1 rounded-full bg-[#241a05]/15 px-2 py-0.5 text-[13px] tnum">
-              <IcoCoin size={13} /> +{adReward}
-            </span>
+            {watchingAd ? (
+              <Spinner size={18} className="text-[#241a05]" />
+            ) : (
+              <>
+                <IcoPlay size={18} />
+                {tr("h.watchAd")}
+                <span className="flex items-center gap-1 rounded-full bg-[#241a05]/15 px-2 py-0.5 text-[13px] tnum">
+                  <IcoCoin size={13} /> +{adReward}
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {/* live ads — campaigns published in Promote appear here instantly */}
-      <SectionH title={`Live ads (${liveAds.length})`} />
+      <SectionH title={tr("h.liveAds", { n: liveAds.length })} />
       <div className="space-y-3">
         {liveAds.map((a, i) => (
             <div key={a.id} className="stagger card p-3.5" style={{ "--i": i } as React.CSSProperties}>
@@ -113,11 +181,11 @@ export default function Home() {
                   <p className="text-[12.5px] text-mut leading-snug mt-1 line-clamp-2">{a.description}</p>
                   <div className="flex items-center gap-2 mt-2.5">
                     <Chip tone={a.source === "campaign" ? "gold" : "tg"}>
-                      {a.source === "campaign" ? <><IcoMega size={12} /> Community</> : <><IcoSpark size={12} /> Sponsored</>}
+                      {a.source === "campaign" ? <><IcoMega size={12} /> {tr("h.community")}</> : <><IcoSpark size={12} /> {tr("h.sponsored")}</>}
                     </Chip>
                     {a.ends_at && <Chip tone="dim"><IcoClock size={12} /> {timeLeft(a.ends_at)}</Chip>}
                     <div className="grow" />
-                    <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoUpR size={14} /> Open</Button>
+                    <Button size="sm" onClick={() => { haptic("medium"); setAd(a); }}><IcoUpR size={14} /> {tr("c.open")}</Button>
                   </div>
                 </div>
               </div>
@@ -125,14 +193,14 @@ export default function Home() {
         ))}
         {liveAds.length === 0 && (
           <div className="card p-6 text-center">
-            <div className="text-[13.5px] font-bold text-mut">No ads right now</div>
-            <div className="text-[12.5px] text-dim mt-1">Ads are removed the moment you complete them — new ones from Promote land here instantly.</div>
+            <div className="text-[13.5px] font-bold text-mut">{tr("h.noAds")}</div>
+            <div className="text-[12.5px] text-dim mt-1">{tr("h.noAdsSub")}</div>
           </div>
         )}
       </div>
 
       {/* available tasks */}
-      <SectionH title={`Available Tasks (${availTasks.length})`} />
+      <SectionH title={tr("h.tasks", { n: availTasks.length })} />
       <div className="space-y-3">
         {availTasks.map((t, i) => (
           <div key={t.id} className="stagger card p-3.5" style={{ "--i": i } as React.CSSProperties}>
@@ -142,103 +210,56 @@ export default function Home() {
             </div>
             <p className="text-[12.5px] text-mut leading-snug mt-1 line-clamp-2">{t.description}</p>
             <div className="flex items-center gap-2 mt-3">
-              <Chip tone="tg"><IcoMega size={12} /> Community</Chip>
+              <Chip tone="tg"><IcoMega size={12} /> {tr("h.community")}</Chip>
               <div className="grow" />
               {t.my_status === "pending"
-                ? <Chip tone="gold">In review</Chip>
-                : <Button size="sm" onClick={() => { haptic("medium"); setTask(t); }}>Start</Button>}
+                ? <Chip tone="gold">{tr("h.inReview")}</Chip>
+                : <Button size="sm" onClick={() => { haptic("medium"); setTask(t); }}>{tr("h.start")}</Button>}
             </div>
           </div>
         ))}
         {availTasks.length === 0 && (
           <div className="card p-6 text-center">
-            <div className="text-[13.5px] font-bold text-mut">No tasks right now</div>
-            <div className="text-[12.5px] text-dim mt-1">Check the live ads above — new ones land there the moment they're published.</div>
+            <div className="text-[13.5px] font-bold text-mut">{tr("h.noTasks")}</div>
+            <div className="text-[12.5px] text-dim mt-1">{tr("h.noTasksSub")}</div>
           </div>
         )}
       </div>
 
-      {watch && <WatchAdModal reward={adReward} onClose={() => setWatch(false)} onReward={onReward} />}
+      <Modal open={langOpen} onClose={() => setLangOpen(false)} title={tr("pr.language")} center>
+        <div className="grid grid-cols-2 gap-2">
+          {LANGS.map((l) => {
+            const on = lang === l.code;
+            return (
+              <button key={l.code} onClick={() => { setLang(l.code); haptic("light"); setLangOpen(false); }}
+                className={`tap flex items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all duration-200 ${on ? "border-sky/55 bg-sky/10 shadow-[0_0_16px_-6px_rgba(78,178,255,0.5)]" : "border-line bg-panel hover:border-mut/40 active:scale-[0.97]"}`}>
+                <span className="min-w-0">
+                  <span className={`block text-[13.5px] font-extrabold leading-tight ${on ? "text-sky" : "text-ink"}`} dir={l.code === "ar" ? "rtl" : "ltr"}>{l.native}</span>
+                  {l.code !== "en" && <span className="block text-[10px] text-dim font-semibold">{l.english}</span>}
+                </span>
+                {on && <span className="text-sky shrink-0"><IcoCheck size={15} /></span>}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-dim text-center mt-3">{tr("pr.choose")}</p>
+      </Modal>
+
       {task && <TaskModal task={task} onClose={() => setTask(null)} onDone={onReward} />}
       {ad && <AdModal ad={ad} onClose={() => setAd(null)} onDone={onReward} />}
+      <PayoutsModal open={payoutsOpen} items={payouts} onClose={() => setPayoutsOpen(false)} />
 
-      <Modal open={activity} onClose={() => setActivity(false)} title="Recent activity">
-        <div className="card divide-y divide-line/60 overflow-hidden">
-          {(recent ?? []).map((t) => <TxRow key={t.id} tx={t} showBalance />)}
-          {recent?.length === 0 && <div className="p-5 text-center text-[13px] text-dim">Nothing yet.</div>}
-        </div>
-      </Modal>
+      <LeaderboardModal open={lbOpen} rows={board} onClose={() => setLbOpen(false)} />
     </div>
   );
 }
 
-/* ── Watch Ad flow — AdsGram reward ad will plug in here ──────────────────── */
-function WatchAdModal({ reward, onClose, onReward }: { reward: number; onClose: () => void; onReward: () => void }) {
-  const { api, toast, setWalletBalance } = useApp();
-  const [phase, setPhase] = useState<"playing" | "crediting" | "done">("playing");
-  const [got, setGot] = useState(reward);
-  const settled = useRef(false);
-
-  useEffect(() => {
-    if (phase !== "done") return;
-    const t = setTimeout(onClose, 1600);
-    return () => clearTimeout(t);
-  }, [phase, onClose]);
-
-  // AdsGram integration point ─────────────────────────────────────────────
-  // When AdsGram is wired in, replace the direct settle() call with:
-  //   adsgram.showAd().then((completed) => { if (completed) settle(); else onClose(); });
-  // Reward crediting already happens server-side in settle() — nothing else changes.
-  const settle = async () => {
-    if (settled.current) return;
-    settled.current = true;
-    setPhase("crediting");
-    const res: ActionResult = await api.completeRewardAd().catch((e): ActionResult => ({ ok: false, error: String(e) }));
-    if (!res.ok) { toast(res.error ?? "Could not claim reward", "err"); onClose(); return; }
-    haptic("success");
-    if (res.balance !== undefined) setWalletBalance(res.balance);
-    setGot(res.reward ?? reward);
-    setPhase("done");
-    toast(`+${res.reward ?? reward} Coins earned`, "ok");
-    onReward();
-  };
-
-  useEffect(() => { haptic("medium"); settle(); /* ad completes → reward lands on its own */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <Modal open onClose={onClose} title={phase === "done" ? "Reward credited" : "Watch Ad"} center>
-      <div className="flex flex-col items-center text-center">
-        {phase === "done" ? (
-          <div className="anim-pop flex flex-col items-center py-5">
-            <div className="relative">
-              <span className="text-gold"><IcoCoin size={64} /></span>
-              <span className="absolute -top-2 -right-4 text-gold anim-float"><IcoSpark size={20} /></span>
-              <span className="absolute -bottom-1 -left-5 text-gold/70 anim-float" style={{ animationDelay: "0.6s" }}><IcoSpark size={14} /></span>
-            </div>
-            <div className="font-display text-[32px] font-bold gold-text glow-gold mt-4">+{got}</div>
-            <div className="text-[13px] text-mut mt-1">Coins added to your balance automatically</div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center py-6">
-            <span className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-gold/25 to-coral/15 border border-gold/35 text-gold flex items-center justify-center">
-              <IcoPlay size={28} />
-              <span className="absolute inset-0 rounded-2xl border border-gold/40" style={{ animation: "radar 1.8s ease-out infinite" }} />
-            </span>
-            <div className="text-[14px] font-extrabold mt-4">{phase === "crediting" ? "Adding your Coins…" : "Verifying ad view…"}</div>
-            <div className="text-[12.5px] text-dim mt-1">+{reward} Coins land automatically — no claim tap</div>
-            {phase === "crediting" && <Spinner size={20} className="text-gold mt-4" />}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
+/* ── Live ad flow (campaigns published in Promote — instant payout) ────────── */
 
 /* ── Live ad flow (campaigns published in Promote — instant payout) ────────── */
 function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDone: () => void }) {
   const { api, toast, setWalletBalance } = useApp();
+  const { t: tr } = useLang();
   const totalSec = Math.max(3, a.required_seconds);
   const [phase, setPhase] = useState<"verify" | "crediting" | "done">("verify");
   const [got, setGot] = useState(a.reward);
@@ -265,7 +286,7 @@ function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDo
     if (res.balance !== undefined) setWalletBalance(res.balance);
     setGot(res.reward ?? a.reward);
     setPhase("done");
-    toast(`+${res.reward ?? a.reward} Coins — view verified`, "ok");
+    toast(tr("h.verified", { n: res.reward ?? a.reward }), "ok");
     onDone();
   };
 
@@ -279,12 +300,12 @@ function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDo
             <span className="absolute -bottom-1 -left-5 text-gold/70 anim-float" style={{ animationDelay: "0.5s" }}><IcoSpark size={13} /></span>
           </div>
           <div className="font-display text-[32px] font-bold text-mint mt-4">+{got}</div>
-          <div className="text-[13px] text-mut mt-1">View verified — Coins added automatically</div>
+          <div className="text-[13px] text-mut mt-1">{tr("h.verifiedNote")}</div>
         </div>
       ) : phase === "crediting" ? (
         <div className="flex flex-col items-center py-9">
           <Spinner size={26} className="text-gold" />
-          <div className="text-[13.5px] font-bold mt-3">Adding your Coins…</div>
+          <div className="text-[13.5px] font-bold mt-3">{tr("h.addingCoins")}</div>
         </div>
       ) : (
         <>
@@ -293,13 +314,13 @@ function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDo
           </div>
           <div className="flex items-center justify-center gap-2 mt-4">
             <Chip tone="mint"><IcoCoin size={12} /> +{a.reward}</Chip>
-            <Chip tone="dim"><IcoEye size={12} /> Verifying your view…</Chip>
+            <Chip tone="dim"><IcoEye size={12} /> {tr("h.verifying")}</Chip>
           </div>
           <p className="text-[12.5px] text-dim text-center mt-2.5 leading-relaxed">
-            Coins are added automatically when the timer ends — nothing to claim.
+            {tr("h.autoClaim")}
           </p>
           <button onClick={() => { haptic("light"); openLink(a.url); }} className="tap mx-auto mt-3.5 flex items-center gap-1.5 text-[12.5px] font-bold text-sky hover:text-ink transition-colors">
-            <IcoUpR size={14} /> Reopen destination
+            <IcoUpR size={14} /> {tr("h.reopen")}
           </button>
         </>
       )}
@@ -310,6 +331,7 @@ function AdModal({ ad: a, onClose, onDone }: { ad: Ad; onClose: () => void; onDo
 /* ── Community task flow (ads published in Promote) ───────────────────────── */
 function TaskModal({ task: t, onClose, onDone }: { task: Task; onClose: () => void; onDone: () => void }) {
   const { api, toast } = useApp();
+  const { t: tr } = useLang();
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -326,7 +348,7 @@ function TaskModal({ task: t, onClose, onDone }: { task: Task; onClose: () => vo
     setBusy(false);
     if (!res.ok) { toast(res.error ?? "Could not verify", "err"); return; }
     haptic("success");
-    toast(`+${res.reward ?? t.reward} Coins — task verified`, "ok");
+    toast(tr("h.taskVerified", { n: res.reward ?? t.reward }), "ok");
     onDone();
     onClose();
   };
@@ -338,20 +360,20 @@ function TaskModal({ task: t, onClose, onDone }: { task: Task; onClose: () => vo
         <Chip tone="gold" className="shrink-0"><IcoCoin size={12} /> +{t.reward}</Chip>
       </div>
       <div className="flex gap-1.5 mt-3 flex-wrap">
-        <Chip tone="tg"><IcoMega size={12} /> User-published</Chip>
-        {t.my_status === "pending" && <Chip tone="gold">In review</Chip>}
+        <Chip tone="tg"><IcoMega size={12} /> {tr("h.userPub")}</Chip>
+        {t.my_status === "pending" && <Chip tone="gold">{tr("h.inReview")}</Chip>}
         {t.deadline && <Chip tone="dim"><IcoClock size={12} /> {timeAgo(t.deadline).replace("ago", "left")}</Chip>}
       </div>
       {sent ? (
         <div className="text-center py-5 anim-pop">
           <span className="inline-flex w-14 h-14 rounded-full bg-mint/12 border border-mint/35 text-mint items-center justify-center"><IcoCheck size={26} /></span>
-          <div className="font-extrabold mt-3">Almost there</div>
-          <p className="text-[13px] text-mut mt-1.5">Claim your reward below — verification is instant for this task.</p>
+          <div className="font-extrabold mt-3">{tr("h.almost")}</div>
+          <p className="text-[13px] text-mut mt-1.5">{tr("h.almostSub")}</p>
           <ClaimButton busy={busy} reward={t.reward} onClick={claim} />
         </div>
       ) : (
         <Button variant="sky" full size="lg" className="mt-4" onClick={openTaskLink}>
-          {t.link ? <><IcoLink size={17} /> Open task</> : "Start task"}
+          {t.link ? <><IcoLink size={17} /> {tr("h.openTask")}</> : tr("h.startTask")}
         </Button>
       )}
     </Modal>
@@ -359,10 +381,145 @@ function TaskModal({ task: t, onClose, onDone }: { task: Task; onClose: () => vo
 }
 
 function ClaimButton({ busy, reward, onClick }: { busy: boolean; reward: number; onClick: () => void }) {
+  const { t: tr } = useLang();
   return (
     <Button size="lg" full className="mt-4" loading={busy} onClick={onClick}>
-      {busy ? <Spinner size={16} /> : <IcoCoin size={18} />} Claim +{reward} Coins
+      {busy ? <Spinner size={16} /> : <IcoCoin size={18} />} {tr("h.claim", { n: reward })}
     </Button>
+  );
+}
+
+/* ── public proof-of-payouts: live ticker + full feed ─────────────────────── */
+function PayoutsTicker({ items, onOpen }: { items: PayoutEntry[]; onOpen: () => void }) {
+  const { t } = useLang();
+  if (items.length === 0) return null;
+  const track = [...items, ...items]; // duplicated for a seamless loop
+  return (
+    <button onClick={onOpen} className="tap group w-full text-left card mt-4 overflow-hidden !p-0 anim-rise" style={{ animationDelay: "40ms" }}>
+      <div className="flex items-center gap-2 px-3.5 pt-2.5">
+        <span className="relative flex w-2 h-2">
+          <span className="absolute inline-flex w-full h-full rounded-full bg-mint opacity-60" style={{ animation: "pulsedot 1.4s infinite" }} />
+          <span className="relative inline-flex w-2 h-2 rounded-full bg-mint" />
+        </span>
+        <span className="text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-mut">{t("h.payouts")}</span>
+        <Chip tone="mint" className="!px-2 !py-0 !text-[9.5px]">{t("h.payoutsLive")}</Chip>
+        <span className="ml-auto text-[10.5px] font-bold text-dim group-hover:text-gold transition-colors">{t("h.payoutsTap")} →</span>
+      </div>
+      <div className="relative mt-2 overflow-hidden py-2.5" style={{ maskImage: "linear-gradient(to right, transparent, black 7%, black 93%, transparent)" }}>
+        <div className="ticker-track flex w-max gap-7">
+          {track.map((p, i) => (
+            <span key={i} className="flex items-center gap-1.5 text-[12.5px] font-bold whitespace-nowrap">
+              <span className="text-mint"><IcoUpR size={13} /></span>
+              <span className="text-ink">{p.name}</span>
+              <span className="text-mut font-semibold">{t("h.cashedOut")} · {p.detail}</span>
+              <span className="tnum text-mint">+{fmt(p.amount)} {p.unit}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PayoutsModal({ open, items, onClose }: { open: boolean; items: PayoutEntry[]; onClose: () => void }) {
+  const { t } = useLang();
+  const { settings } = useApp();
+  const channel = (settings?.payouts_channel_url ?? "").trim();
+  return (
+    <Modal open={open} onClose={onClose} title={t("h.payouts")} tall>
+      <p className="text-[12.5px] text-mut leading-relaxed">{t("h.payoutsNote")}</p>
+      <div className="card divide-y divide-line/60 overflow-hidden mt-3">
+        {items.map((p, i) => (
+          <div key={i} className="flex items-center gap-3 px-3.5 py-3 anim-fade" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+            <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-mint/12 border-mint/35 text-mint">
+              <IcoUpR size={16} />
+            </span>
+            <div className="grow min-w-0">
+              <div className="text-[13.5px] font-extrabold truncate">
+                {p.name}{" "}
+                <span className="text-mut font-semibold">{t("h.cashedOut")} · {p.detail}</span>
+              </div>
+              <div className="text-[11px] text-dim mt-0.5">{timeAgo(p.when)}</div>
+            </div>
+            <div className="font-display text-[15px] font-bold tnum shrink-0 text-mint">
+              +{fmt(p.amount)} <span className="text-[11px] text-mut font-body font-bold">{p.unit}</span>
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && <div className="p-6 text-center text-[13px] text-dim">{t("h.payoutsEmpty")}</div>}
+      </div>
+      {channel && (
+        <div className="card mt-3 p-4 border-tg/35">
+          <div className="text-[13px] font-extrabold flex items-center gap-2"><IcoPlane size={15} className="text-tg" /> {t("h.channel")}</div>
+          <p className="text-[12px] text-mut mt-1 leading-relaxed">{t("h.channelSub")}</p>
+          <Button variant="sky" full className="mt-3" onClick={() => { haptic("light"); openLink(channel); }}>
+            <IcoPlane size={16} /> {t("h.openChannel")}
+          </Button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ── top-10 leaderboard — first names only, your row flagged server-side ──── */
+function LeaderboardModal({ open, rows, onClose }: { open: boolean; rows: LeaderboardRow[]; onClose: () => void }) {
+  const { t } = useLang();
+  const medal = (rank: number) =>
+    rank === 1 ? { c: "#ffc24b", glow: "shadow-[0_0_24px_-6px_rgba(255,194,75,0.55)]", ring: "border-gold/50" }
+    : rank === 2 ? { c: "#c9d6e3", glow: "", ring: "border-line2" }
+    : rank === 3 ? { c: "#d9975f", glow: "", ring: "border-[#d9975f]/40" }
+    : { c: "", glow: "", ring: "border-line" };
+  return (
+    <Modal open={open} onClose={onClose} title={t("h.leaderboard")} tall>
+      {/* banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-gold/35 bg-gradient-to-br from-gold/15 via-panel to-panel p-4">
+        <span className="absolute -top-6 -right-4 text-gold/25"><IcoTrophy size={96} /></span>
+        <div className="relative flex items-center gap-3">
+          <span className="w-11 h-11 rounded-xl bg-gold/20 border border-gold/45 text-gold flex items-center justify-center shrink-0 anim-coinbob"><IcoTrophy size={22} /></span>
+          <div>
+            <div className="font-display text-[17px] font-bold gold-text">{t("h.leaderboard")}</div>
+            <div className="text-[12px] text-mut leading-snug mt-0.5">{t("h.lbSub")}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* rows */}
+      <div className="space-y-2 mt-3.5">
+        {rows.map((r) => {
+          const m = medal(r.rank);
+          const podium = r.rank <= 3;
+          return (
+            <div key={r.rank}
+              className={`flex items-center gap-3 rounded-xl border bg-panel px-3 py-2.5 anim-fade ${m.ring} ${m.glow} ${r.me ? "!border-gold/60 !bg-gold/8" : ""} ${podium ? "py-3" : ""}`}
+              style={{ animationDelay: `${Math.min(r.rank, 10) * 45}ms` }}>
+              {/* rank badge */}
+              <span className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-[13px] shrink-0 tnum ${podium ? "text-[#241a05]" : "text-dim border border-line"}`}
+                style={podium ? { background: m.c, boxShadow: `0 4px 14px -4px ${m.c}` } : undefined}>
+                {r.rank}
+              </span>
+              <Avatar name={r.name} size={podium ? 40 : 34} hue={(r.rank * 67) % 360} />
+              <div className="grow min-w-0">
+                <div className="text-[13.5px] font-extrabold truncate flex items-center gap-1.5">
+                  <span className="truncate">{r.name}</span>
+                  {r.me && <Chip tone="gold" className="!px-1.5 !py-0 !text-[9.5px]">{t("h.lbYou")}</Chip>}
+                </div>
+                {podium && <div className="text-[10.5px] text-dim font-bold uppercase tracking-wider">#{r.rank}</div>}
+              </div>
+              <div className={`font-display font-bold tnum shrink-0 flex items-center gap-1.5 ${r.rank === 1 ? "text-[19px] gold-text" : r.rank <= 3 ? "text-[16px]" : "text-[15px] text-ink"}`}>
+                <IcoCoin size={r.rank === 1 ? 17 : 14} className={r.rank === 1 ? "text-gold" : "text-mut"} />
+                {fmt(r.coins)}
+              </div>
+            </div>
+          );
+        })}
+        {rows.length === 0 && (
+          <div className="card p-7 text-center">
+            <span className="inline-flex w-14 h-14 rounded-full bg-panel2 border border-line text-dim items-center justify-center mb-3"><IcoTrophy size={24} /></span>
+            <div className="text-[13px] text-mut leading-relaxed max-w-[260px] mx-auto">{t("h.lbEmpty")}</div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

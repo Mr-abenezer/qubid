@@ -41,6 +41,7 @@ export interface Settings {
   deposit_bonus_pct?: number;
   deposit_bep20_address?: string;
   deposit_telebirr_number?: string;
+  payouts_channel_url?: string;
 }
 
 export interface Wallet {
@@ -119,6 +120,31 @@ export interface Withdrawal {
 }
 
 export type DepositMethod = "BEP20" | "Telebirr";
+
+// public proof-of-payouts feed — approved withdrawals only (bid wins stay
+// private). `name` is the user's profile first name; usernames never ship.
+export interface PayoutEntry {
+  kind: "withdrawal";
+  name: string;       // profile first name only
+  amount: number;
+  unit: "USDT" | "Birr";
+  detail: string;     // masked destination, e.g. "BEP20 ••••0663"
+  when: string;       // ISO timestamp
+}
+
+// top earners ranked by Coin balance — first names only, usernames never ship
+export interface LeaderboardRow {
+  rank: number;
+  name: string;       // profile first name only — usernames never ship
+  coins: number;
+  me: boolean;        // server flags the caller's own row
+}
+
+export interface Broadcast {
+  id: string;
+  body: string;   // admin-authored HTML, sanitized client-side before render
+  created_at: string;
+}
 
 export interface Deposit {
   id: string;
@@ -219,7 +245,6 @@ export interface ActionResult {
 }
 
 export interface Backend {
-  mode: "mock" | "live";
   bootstrap(): Promise<Bootstrap>;
   // earning
   listAds(): Promise<Ad[]>;
@@ -253,6 +278,9 @@ export interface Backend {
   listMyWithdrawals(): Promise<Withdrawal[]>;
   requestDeposit(method: DepositMethod, coins: number, proof: string): Promise<ActionResult>;
   listMyDeposits(): Promise<Deposit[]>;
+  getBroadcast(): Promise<Broadcast | null>;
+  recentPayouts(): Promise<PayoutEntry[]>;
+  leaderboard(): Promise<LeaderboardRow[]>;
   // admin
   adminStats(): Promise<AdminStats>;
   adminUsers(q?: string): Promise<AdminUserRow[]>;
@@ -275,6 +303,8 @@ export interface Backend {
   adminSetWithdrawal(id: string, status: string): Promise<ActionResult>;
   adminDeposits(): Promise<Deposit[]>;
   adminSetDeposit(id: string, status: "approved" | "rejected"): Promise<ActionResult>;
+  adminSendBroadcast(html: string): Promise<ActionResult>;
+  adminClearBroadcast(): Promise<ActionResult>;
   adminGetSettings(): Promise<Settings>;
   adminSaveSettings(s: Settings): Promise<ActionResult>;
 }

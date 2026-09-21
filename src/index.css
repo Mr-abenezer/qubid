@@ -69,6 +69,11 @@ body {
 .safe-b { padding-bottom: calc(env(safe-area-inset-bottom, 0px)); }
 :root { --ring-track: #1e3a56; }
 
+/* ─── payouts ticker: seamless infinite marquee ─────────────────────────── */
+.ticker-track { animation: ticker 60s linear infinite; will-change: transform; }
+.ticker-track:hover { animation-play-state: paused; }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
 .card {
   background: linear-gradient(165deg, rgba(22, 48, 74, 0.55), rgba(15, 33, 54, 0.9));
   border: 1px solid rgba(42, 74, 107, 0.5);

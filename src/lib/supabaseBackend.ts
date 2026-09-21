@@ -101,17 +101,21 @@ export function createSupabaseBackend(initDataStr: string): Backend {
   const roundChannel = { cb: null as (() => void) | null, unsub: null as (() => void) | null };
 
   return {
-    mode: "live",
-
     async bootstrap() {
       await ensureSession(sb, initDataStr);
       try {
         return await rpc(sb, "bootstrap");
       } catch (e) {
-        // Self-heal: a stale/orphaned session (e.g. account row predates auth
-        // linking) — sign out, log in fresh once, then retry.
-        if (String((e as Error)?.message ?? "").includes("Account not found")) {
+        // Self-heal, once:
+        //  · "Account not found" — stale/orphaned session predating auth linking.
+        //  · JWT errors ("JWT issued at future", expired, invalid signature…) —
+        //    clock-skew races between GoTrue minting and PostgREST verifying,
+        //    or a rotated JWT secret after a project pause. A fresh login a
+        //    beat later always lands on the right side of the clock.
+        const msg = String((e as Error)?.message ?? "");
+        if (/account not found|jwt|token|signature|expired/i.test(msg)) {
           await sb.auth.signOut();
+          await new Promise((r) => setTimeout(r, 1200));
           await ensureSession(sb, initDataStr);
           return rpc(sb, "bootstrap");
         }
@@ -166,6 +170,9 @@ export function createSupabaseBackend(initDataStr: string): Backend {
       return withDbHint(await A(sb.rpc("request_deposit" as never, { p_method: method, p_coins: coins, p_proof: proof } as never)));
     },
     async listMyDeposits() { return rpc(sb, "list_my_deposits"); },
+    async getBroadcast() { return rpc(sb, "get_broadcast"); },
+    async recentPayouts() { return rpc(sb, "recent_payouts"); },
+    async leaderboard() { return rpc(sb, "top_earners"); },
 
     async getReferralStats() {
       // Server RPC ships in supabase/migrations/002_referrals.sql — until it is
@@ -201,6 +208,12 @@ export function createSupabaseBackend(initDataStr: string): Backend {
     async adminDeposits() { return rpc(sb, "admin_deposits"); },
     async adminSetDeposit(id, status) {
       return withDbHint(await A(sb.rpc("admin_set_deposit" as never, { p_id: id, p_status: status } as never)));
+    },
+    async adminSendBroadcast(html) {
+      return withDbHint(await A(sb.rpc("admin_send_broadcast" as never, { p_html: html } as never)));
+    },
+    async adminClearBroadcast() {
+      return withDbHint(await A(sb.rpc("admin_clear_broadcast" as never)));
     },
     async adminGetSettings() { return rpc(sb, "admin_get_settings"); },
     async adminSaveSettings(s) { return A(sb.rpc("admin_save_settings" as never, { p: s } as never)); },

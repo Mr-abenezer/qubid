@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, type ReferralStats } from "../lib/types";
 import { haptic, openLink } from "../lib/telegram";
+import { useLang } from "../lib/i18n";
 import { Avatar, Chip, CopyBtn, IcoCheck, IcoClock, IcoCoin, IcoGift, IcoRefresh, IcoShare, IcoUsers } from "../components/ui";
 
 // ?startapp= only works on Mini App links (t.me/bot/<appname>?startapp=…).
@@ -11,6 +12,7 @@ const MINI_APP_NAME = "Earn";
 
 export default function Invite() {
   const { user, settings, api, toast } = useApp();
+  const { t } = useLang();
   const [stats, setStats] = useState<ReferralStats | null>(null);
 
   const load = useCallback(() => {
@@ -27,19 +29,20 @@ export default function Invite() {
   const comm = settings.referral_commission ?? 5;
   const code = stats?.code || user.telegram_id || user.id;
   const link = `${BOT_BASE}/${MINI_APP_NAME}?startapp=${code}`;
-  const shareText = `I'm earning Coins on Bid X — watch ads, complete tasks and win bid pots. Join with my link and I get +${bonus} Coins when you finish your first task: ${link}`;
+  const shareText = t("i.shareText", { b: bonus, link });
   const share = () => {
     haptic("light");
     openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
   };
-  const totalCompleted = (stats?.referrals ?? []).reduce((s, r) => s + r.completed, 0);
+  const referrals = Array.isArray(stats?.referrals) ? stats!.referrals : [];
+  const totalCompleted = referrals.reduce((s, r) => s + (r.completed ?? 0), 0);
 
   return (
     <div className="px-4 pt-4 pb-2">
       <div className="flex items-center justify-between anim-rise">
         <div>
-          <h1 className="font-display text-[19px] font-bold flex items-center gap-2">Invite Friends <IcoGift size={19} className="text-mint" /></h1>
-          <p className="text-[13px] text-mut mt-1">Get +{bonus} when a friend completes their first task — then +{comm} on every task after.</p>
+          <h1 className="font-display text-[19px] font-bold flex items-center gap-2">{t("i.title")} <IcoGift size={19} className="text-mint" /></h1>
+          <p className="text-[13px] text-mut mt-1">{t("i.sub", { b: bonus, c: comm })}</p>
         </div>
         <button onClick={() => { haptic("light"); load(); }} className="tap p-2.5 rounded-xl border border-line bg-panel text-mut hover:text-ink shrink-0"><IcoRefresh size={17} /></button>
       </div>
@@ -57,78 +60,81 @@ export default function Invite() {
           <div className="grow">
             <div className="flex items-baseline gap-2">
               <span className="font-display text-[30px] font-bold text-mint glow-gold tnum leading-none">+{bonus}</span>
-              <span className="text-[13px] font-bold text-mut">Coins / friend</span>
+              <span className="text-[13px] font-bold text-mut">{t("i.perFriend")}</span>
             </div>
             <div className="text-[12.5px] text-mut mt-1.5 leading-snug">
-              Credited when your friend completes their <b className="text-ink">first task</b> — then <b className="text-mint">+{comm} Coins</b> for <b className="text-ink">every task or ad</b> after that. Forever.
+              {t("i.heroNote", { c: comm })}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2.5 mt-4 relative">
           <div className="card bg-abyss/50 p-3 text-center">
-            <div className="font-display text-[19px] font-bold tnum">{stats ? fmt(stats.count) : "—"}</div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-dim mt-0.5">Friends joined</div>
+            <div className="font-display text-[19px] font-bold tnum">{stats ? fmt(stats.count ?? 0) : "—"}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-dim mt-0.5">{t("i.joined")}</div>
           </div>
           <div className="card bg-abyss/50 p-3 text-center">
-            <div className="font-display text-[19px] font-bold text-gold tnum">{stats ? `+${fmt(stats.earned)}` : "—"}</div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-dim mt-0.5">Coins earned</div>
+            <div className="font-display text-[19px] font-bold text-gold tnum">{stats ? `+${fmt(stats.earned ?? 0)}` : "—"}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-dim mt-0.5">{t("i.earnedC")}</div>
           </div>
         </div>
       </div>
 
       {/* link card */}
       <div className="card mt-4 p-4 anim-rise" style={{ animationDelay: "110ms" }}>
-        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut">Your invite link</div>
+        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut">{t("i.yourLink")}</div>
         <div className="card bg-abyss/60 p-3 mt-2.5 text-[12.5px] font-semibold text-sky break-all tnum leading-relaxed">{link}</div>
         <div className="flex gap-2 mt-3">
-          <CopyBtn text={link} label="Copy link" className="flex-1 justify-center !py-2.5" />
+          <CopyBtn text={link} label={t("i.copy")} className="flex-1 justify-center !py-2.5" />
           <button onClick={share} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-tg/15 border border-tg/45 text-tg px-2.5 py-2.5 text-[12px] font-extrabold hover:brightness-110 transition-all">
-            <IcoShare size={14} /> Share on Telegram
+            <IcoShare size={14} /> {t("i.share")}
           </button>
         </div>
         <div className="text-[11.5px] text-dim mt-2.5 leading-relaxed">
-          Your code: <b className="text-mut tnum">{code}</b> — friends must open the app <b className="text-mut">through this link</b> to be attached to you. Your +{bonus} unlocks once they complete their first task.
+          {t("i.codeNote", { c: code, b: bonus })}
         </div>
       </div>
 
       {/* friends list */}
       <div className="flex items-center justify-between mt-6 mb-2.5">
-        <h2 className="font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-mut flex items-center gap-2"><IcoUsers size={15} /> Your friends</h2>
-        {stats && stats.count > 0 && <Chip tone="mint">{fmt(totalCompleted)} tasks done</Chip>}
+        <h2 className="font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-mut flex items-center gap-2"><IcoUsers size={15} /> {t("i.friends")}</h2>
+        {stats && stats.count > 0 && <Chip tone="mint">{t("i.tasksDone", { n: fmt(totalCompleted) })}</Chip>}
       </div>
       {!stats ? (
         <div className="skeleton h-[140px] rounded-2xl" />
-      ) : stats.referrals.length === 0 ? (
+      ) : referrals.length === 0 ? (
         <div className="card flex flex-col items-center text-center py-9 px-6 anim-fade">
           <div className="w-12 h-12 rounded-full bg-panel2 border border-line flex items-center justify-center text-dim mb-3"><IcoGift size={22} /></div>
-          <div className="font-bold text-[15px]">No friends yet</div>
-          <p className="text-[13px] text-mut mt-1 max-w-[260px] leading-relaxed">Share your link — the first +{bonus} Coins are one tap away.</p>
-          <button onClick={share} className="tap mt-4 inline-flex items-center gap-2 rounded-xl bg-tg/15 border border-tg/45 text-tg px-4 py-2.5 text-[13px] font-extrabold"><IcoShare size={15} /> Share now</button>
+          <div className="font-bold text-[15px]">{t("i.empty")}</div>
+          <p className="text-[13px] text-mut mt-1 max-w-[260px] leading-relaxed">{t("i.emptySub", { b: bonus })}</p>
+          <button onClick={share} className="tap mt-4 inline-flex items-center gap-2 rounded-xl bg-tg/15 border border-tg/45 text-tg px-4 py-2.5 text-[13px] font-extrabold"><IcoShare size={15} /> {t("i.shareNow")}</button>
         </div>
       ) : (
         <div className="card divide-y divide-line/60 overflow-hidden">
-          {stats.referrals.map((r, i) => {
+          {referrals.map((r, i) => {
             const validated = r.status === "validated";
+            const uname = r.user?.username ?? "";
+            const fname = r.user?.first_name ?? uname ?? t("i.friend");
             return (
-              <div key={r.id} className={`flex items-center gap-3 px-3.5 py-3 ${i === 0 ? "anim-slide" : "anim-fade"}`}>
-                <Avatar name={r.user.username} photo={r.user.photo_url} size={38} />
+              <div key={r.id ?? i} className={`flex items-center gap-3 px-3.5 py-3 ${i === 0 ? "anim-slide" : "anim-fade"}`}>
+                <Avatar name={uname || fname} photo={r.user?.photo_url} size={38} />
                 <div className="grow min-w-0">
                   <div className="text-[13.5px] font-extrabold truncate flex items-center gap-1.5">
-                    {r.user.first_name} <span className="text-mut font-semibold">@{r.user.username}</span>
+                    <span className="truncate">{fname}</span>
+                    {uname && <span className="text-mut font-semibold truncate">@{uname}</span>}
                     {validated ? (
-                      <Chip tone="mint"><IcoCheck size={10} /> Validated</Chip>
+                      <Chip tone="mint"><IcoCheck size={10} /> {t("i.validated")}</Chip>
                     ) : (
-                      <Chip tone="gold"><IcoClock size={10} /> Pending</Chip>
+                      <Chip tone="gold"><IcoClock size={10} /> {t("c.pending")}</Chip>
                     )}
                   </div>
                   <div className="text-[11.5px] text-dim mt-0.5">
-                    joined {timeAgo(r.joined_at)} · {r.completed} task{r.completed === 1 ? "" : "s"}
-                    {!validated && <span className="text-gold/90"> — +{bonus} unlocks on first task</span>}
+                    {t("i.joinedAgo", { x: r.joined_at ? timeAgo(r.joined_at) : "—", n: r.completed ?? 0 })}
+                    {!validated && <span className="text-gold/90"> {t("i.unlocks", { b: bonus })}</span>}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className={`text-[13.5px] font-extrabold tnum ${validated ? "text-gold" : "text-dim"}`}>{validated ? `+${fmt(r.earned)}` : "+0"}</div>
-                  <div className="text-[10.5px] text-dim">Coins</div>
+                  <div className={`text-[13.5px] font-extrabold tnum ${validated ? "text-gold" : "text-dim"}`}>{validated ? `+${fmt(r.earned ?? 0)}` : "+0"}</div>
+                  <div className="text-[10.5px] text-dim">{t("c.coins")}</div>
                 </div>
               </div>
             );
@@ -138,11 +144,11 @@ export default function Invite() {
 
       {/* how it works */}
       <div className="card p-4 mt-6">
-        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">How rewards flow</div>
+        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">{t("i.how")}</div>
         {[
-          { n: "1", t: "Friend opens your link", s: "They land in the app with your code attached — no forms, no setup. They show up in your list as Pending.", tone: "text-sky border-sky/40 bg-sky/10" },
-          { n: "2", t: `They finish 1 task → you get +${bonus}`, s: "The first completed task validates the referral and unlocks your bonus instantly.", tone: "text-mint border-mint/40 bg-mint/10" },
-          { n: "3", t: `+${comm} Coins on every task after that`, s: "Ads, tasks, clicks — you earn a commission on all of it, automatically. Forever.", tone: "text-gold border-gold/40 bg-gold/10" },
+          { n: "1", t: t("i.step1t"), s: t("i.step1s"), tone: "text-sky border-sky/40 bg-sky/10" },
+          { n: "2", t: t("i.step2t", { b: bonus }), s: t("i.step2s"), tone: "text-mint border-mint/40 bg-mint/10" },
+          { n: "3", t: t("i.step3t", { c: comm }), s: t("i.step3s"), tone: "text-gold border-gold/40 bg-gold/10" },
         ].map((x) => (
           <div key={x.n} className="flex gap-3 py-2.5">
             <span className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-[12.5px] font-black ${x.tone}`}>{x.n}</span>
@@ -154,7 +160,7 @@ export default function Invite() {
         ))}
       </div>
 
-      <p className="text-[11px] text-dim text-center mt-5 mb-1">Referral rewards are validated and credited server-side. Self-referrals and bots are filtered out.</p>
+      <p className="text-[11px] text-dim text-center mt-5 mb-1">{t("i.foot")}</p>
     </div>
   );
 }

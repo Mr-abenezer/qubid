@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppProvider, useApp, type Tab } from "./state/AppContext";
 import { bootTelegram, haptic, initData, isTelegram, openLink } from "./lib/telegram";
-import { createMockBackend, resetMock } from "./lib/mock";
+import { LANGS, setLang, useLang } from "./lib/i18n";
 import { createSupabaseBackend, hasSupabase } from "./lib/supabaseBackend";
 import type { Backend } from "./lib/types";
 import { fmt, timeAgo } from "./lib/types";
@@ -14,8 +14,6 @@ import Wallet from "./screens/Wallet";
 import Admin from "./screens/Admin";
 
 const APP_URL = ((import.meta as unknown as { env?: Record<string, string> }).env ?? {}).VITE_APP_URL ?? "https://t.me/BidX_SmartEarningsbot/Earn";
-const previewFlag = () => new URLSearchParams(location.search).has("preview") || localStorage.getItem("bidx_preview") === "1";
-const enablePreview = () => { localStorage.setItem("bidx_preview", "1"); location.reload(); };
 
 // Drop your logo into public/logo.png (or logo.svg) and it replaces the coin
 // mark automatically on the verifying/splash screen. Falls back to the built-in
@@ -61,12 +59,11 @@ export default function App() {
 
   useEffect(() => {
     bootTelegram();
-    if (previewFlag()) { setBackend(createMockBackend()); return; }
     if (isTelegram()) {
       if (!hasSupabase()) { setNoConfig(true); return; }
       setBackend(createSupabaseBackend(initData()));
     }
-    // otherwise: stay on the gate
+    // outside Telegram: stay on the gate
   }, []);
 
   if (backend) {
@@ -109,11 +106,13 @@ function Shell({ backend }: { backend: Backend }) {
       <div className="dotgrid fixed inset-x-0 top-0 h-[420px] pointer-events-none max-w-md mx-auto" />
 
       <main className="pb-[104px] relative">
-        {tab === "home" && <Home />}
-        {tab === "promote" && <Promote />}
-        {tab === "arena" && <Arena />}
-        {tab === "invite" && <Invite />}
-        {tab === "wallet" && <Wallet />}
+        <ScreenBoundary key={tab}>
+          {tab === "home" && <Home />}
+          {tab === "promote" && <Promote />}
+          {tab === "arena" && <Arena />}
+          {tab === "invite" && <Invite />}
+          {tab === "wallet" && <Wallet />}
+        </ScreenBoundary>
       </main>
 
       <TabBar tab={tab} setTab={setTab} />
@@ -139,13 +138,14 @@ function Shell({ backend }: { backend: Backend }) {
         </div>
       )}
 
-      <ProfileSheet open={profile} onClose={() => setProfile(false)} mode={backend.mode} />
+      <ProfileSheet open={profile} onClose={() => setProfile(false)} />
       {admin && user.is_admin && <Admin onClose={() => setAdmin(false)} />}
     </div>
   );
 
-  function ProfileSheet({ open, onClose, mode }: { open: boolean; onClose: () => void; mode: "mock" | "live" }) {
+  function ProfileSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { user, wallet, settings, theme, setTheme } = useApp();
+    const { lang, t } = useLang();
     if (!user || !wallet || !settings) return null;
     return (
       <Modal open={open} onClose={onClose} title="Profile">
@@ -165,16 +165,36 @@ function Shell({ backend }: { backend: Backend }) {
         </div>
 
         <div className="card mt-4 px-4 py-3 flex items-center justify-between gap-3">
-          <span className="text-[12.5px] text-mut font-semibold">Appearance</span>
+          <span className="text-[12.5px] text-mut font-semibold">{t("pr.appearance")}</span>
           <div className="flex rounded-xl border border-line bg-panel p-1 gap-1">
             <button onClick={() => setTheme("dark")}
               className={`tap flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-extrabold transition-all ${theme === "dark" ? "bg-gold/15 text-gold shadow-[inset_0_0_0_1px_rgba(255,194,75,0.4)]" : "text-dim"}`}>
-              <IcoMoon size={13} /> Dark
+              <IcoMoon size={13} /> {t("pr.dark")}
             </button>
             <button onClick={() => setTheme("light")}
               className={`tap flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-extrabold transition-all ${theme === "light" ? "bg-gold/15 text-gold shadow-[inset_0_0_0_1px_rgba(255,194,75,0.4)]" : "text-dim"}`}>
-              <IcoSun size={13} /> Light
+              <IcoSun size={13} /> {t("pr.light")}
             </button>
+          </div>
+        </div>
+
+        {/* language picker */}
+        <div className="card mt-3 p-4">
+          <span className="text-[12.5px] text-mut font-semibold">{t("pr.language")}</span>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            {LANGS.map((l) => {
+              const on = lang === l.code;
+              return (
+                <button key={l.code} onClick={() => { setLang(l.code); haptic("light"); }}
+                  className={`tap flex items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all duration-200 ${on ? "border-gold/55 bg-gold/10 shadow-[0_0_16px_-6px_rgba(255,194,75,0.5)]" : "border-line bg-panel hover:border-mut/40"}`}>
+                  <span className="min-w-0">
+                    <span className={`block text-[13px] font-extrabold leading-tight ${on ? "text-gold" : "text-ink"}`} dir={l.code === "ar" ? "rtl" : "ltr"}>{l.native}</span>
+                    {l.code !== "en" && <span className="block text-[10px] text-dim font-semibold">{l.english}</span>}
+                  </span>
+                  {on && <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_10px_rgba(255,194,75,0.9)] shrink-0" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -182,8 +202,6 @@ function Shell({ backend }: { backend: Backend }) {
           <KV k="Telegram ID" v={user.telegram_id ?? "—"} mono />
           <KV k="Language" v={(user.language ?? "en").toUpperCase()} />
           <KV k="Member since" v={timeAgo(user.created_at).replace("ago", "ago")} />
-          <KV k="Coin rate" v={`1 Coin = ${settings.coin_usdt_rate} USDT`} />
-          <KV k="Session" v={mode === "mock" ? "Developer preview (simulated)" : "Telegram initData · verified"} />
         </div>
 
         {user.is_admin && (
@@ -192,16 +210,6 @@ function Shell({ backend }: { backend: Backend }) {
           </Button>
         )}
 
-        {mode === "mock" && (
-          <div className="card mt-4 p-4 border-sky/35">
-            <div className="text-[12px] font-extrabold uppercase tracking-wider text-sky">Developer preview</div>
-            <p className="text-[12.5px] text-mut mt-1.5 leading-relaxed">This session simulates Telegram + Supabase locally. Inside Telegram, identity and every Coin movement are verified server-side.</p>
-            <div className="flex gap-2 mt-3">
-              <Button variant="ghost" size="sm" className="flex-1" onClick={resetMock}><IcoRefresh size={14} /> Reset data</Button>
-              <Button variant="sky" size="sm" className="flex-1" onClick={() => { localStorage.removeItem("bidx_preview"); location.href = location.pathname; }}><IcoX size={14} /> Exit preview</Button>
-            </div>
-          </div>
-        )}
         <p className="text-[11px] text-dim text-center mt-4 mb-1">Bid X · Smart Earnings — balances, bids and payouts are decided by the server, never by this device.</p>
       </Modal>
     );
@@ -216,13 +224,14 @@ const KV = ({ k, v, mono }: { k: string; v: string; mono?: boolean }) => (
 );
 
 function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  const { t } = useLang();
   const left: { v: Tab; label: string; icon: React.ReactNode }[] = [
-    { v: "home", label: "Home", icon: <IcoHome size={21} /> },
-    { v: "promote", label: "Promote", icon: <IcoMega size={21} /> },
+    { v: "home", label: t("nav.home"), icon: <IcoHome size={21} /> },
+    { v: "promote", label: t("nav.promote"), icon: <IcoMega size={21} /> },
   ];
   const right: { v: Tab; label: string; icon: React.ReactNode }[] = [
-    { v: "invite", label: "Invite", icon: <IcoGift size={21} /> },
-    { v: "wallet", label: "Wallet", icon: <IcoWallet size={21} /> },
+    { v: "invite", label: t("nav.invite"), icon: <IcoGift size={21} /> },
+    { v: "wallet", label: t("nav.wallet"), icon: <IcoWallet size={21} /> },
   ];
   const arenaActive = tab === "arena";
 
@@ -263,7 +272,7 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
               </span>
               <span className="absolute inset-0 rounded-full border border-gold/40" style={{ animation: "radar 2.4s ease-out infinite" }} />
             </span>
-            <span className={`text-[10px] font-extrabold tracking-wide mt-0.5 transition-colors duration-200 ${arenaActive ? "text-gold" : "text-mut"}`}>Bid &amp; Win</span>
+            <span className={`text-[10px] font-extrabold tracking-wide mt-0.5 transition-colors duration-200 ${arenaActive ? "text-gold" : "text-mut"}`}>{t("a.title")}</span>
           </button>
 
           {right.map(side)}
@@ -274,6 +283,7 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 }
 
 function Splash() {
+  const { t } = useLang();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="relative anim-pop">
@@ -283,24 +293,54 @@ function Splash() {
       </div>
       <div className="mt-6"><Logo size="lg" /></div>
       <div className="flex items-center gap-2 text-mut text-[13px] font-semibold mt-4">
-        <Spinner size={15} className="text-gold" /> Verifying your Telegram account…
+        <Spinner size={15} className="text-gold" /> {t("splash.verifying")}
       </div>
-      <p className="text-[11.5px] text-dim mt-2 text-center max-w-[260px]">Your Bid X account is created automatically from your Telegram ID.</p>
+      <p className="text-[11.5px] text-dim mt-2 text-center max-w-[260px]">{t("splash.note")}</p>
     </div>
   );
 }
 
+/* ── screen-level error boundary: a render crash shows this card instead of a black screen ── */
+class ScreenBoundary extends React.Component<{ children: ReactNode }, { err: Error | null }> {
+  state = { err: null as Error | null };
+  static getDerivedStateFromError(err: Error) { return { err }; }
+  render() {
+    if (this.state.err) {
+      return (
+        <div className="px-4 pt-10 flex justify-center">
+          <div className="card p-6 max-w-[340px] text-center anim-pop">
+            <span className="inline-flex w-14 h-14 rounded-full bg-gold/12 border border-gold/35 text-gold items-center justify-center anim-float"><IcoInfo size={26} /></span>
+            <div className="font-display text-[17px] font-bold mt-3">This page hit a snag</div>
+            <p className="text-[12.5px] text-mut mt-2 leading-relaxed">
+              Your Coins and progress are safe. Reload to continue — if it repeats, the detail below helps us fix it fast.
+            </p>
+            <Button full className="mt-4" onClick={() => location.reload()}><IcoRefresh size={16} /> Reload page</Button>
+            <div className="text-[10px] text-dim/70 mt-3.5 break-words tnum">{String(this.state.err?.message ?? this.state.err)}</div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function BootError({ msg, retry }: { msg: string; retry: () => void }) {
+  const [busy, setBusy] = useState(false);
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="card p-6 max-w-[340px] text-center anim-pop">
-        <span className="inline-flex w-14 h-14 rounded-full bg-coral/12 border border-coral/35 text-coral items-center justify-center"><IcoX size={26} /></span>
-        <div className="font-display text-[17px] font-bold mt-3">Couldn't connect</div>
-        <p className="text-[13px] text-coral/90 font-semibold mt-2 break-words">{msg}</p>
+        <span className="inline-flex w-14 h-14 rounded-full bg-gold/12 border border-gold/35 text-gold items-center justify-center anim-float"><IcoClock size={26} /></span>
+        <div className="font-display text-[17px] font-bold mt-3">Connection hiccup</div>
         <p className="text-[12.5px] text-mut mt-2 leading-relaxed">
-          If you just deployed, make sure the SQL migration has run and the <b>telegram-login</b> Edge Function is live with your bot token.
+          We couldn't reach the Bid X server just now. Your Coins and progress are safe — one retry almost always fixes it.
         </p>
-        <Button full className="mt-4" onClick={() => { haptic("light"); retry(); }}><IcoRefresh size={16} /> Try again</Button>
+        <Button full className="mt-4" loading={busy} onClick={async () => {
+          haptic("light"); setBusy(true);
+          await new Promise((r) => setTimeout(r, 400));
+          retry();
+          setBusy(false);
+        }}><IcoRefresh size={16} /> Try again</Button>
+        <div className="text-[10px] text-dim/70 mt-3.5 break-words tnum">Details: {msg}</div>
       </div>
     </div>
   );
@@ -341,16 +381,7 @@ function Gate({ noConfig }: { noConfig: boolean }) {
       )}
 
       <div className="flex gap-2 mt-6 flex-wrap justify-center anim-rise" style={{ animationDelay: "320ms" }}>
-        <Chip tone="gold"><IcoCoin size={12} /> 1 Coin = 0.0006 USDT</Chip>
-        <Chip tone="mint">85% winner pools</Chip>
         <Chip tone="tg">Telegram-signed login</Chip>
-      </div>
-
-      <div className="absolute bottom-6 inset-x-0 flex flex-col items-center gap-1.5 anim-rise" style={{ animationDelay: "420ms" }}>
-        <span className="text-[11px] text-dim">Building or testing Bid X?</span>
-        <button onClick={enablePreview} className="tap text-[12.5px] font-bold text-sky underline decoration-sky/40 underline-offset-4 hover:decoration-sky">
-          Launch the developer preview
-        </button>
       </div>
     </div>
   );

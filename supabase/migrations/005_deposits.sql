@@ -146,7 +146,9 @@ insert into public.platform_settings(key, value) values
   ('deposit_bep20_address', ''),
   ('deposit_telebirr_number', ''),
   ('min_deposit', '100'),
-  ('deposit_bonus_pct', '0')
+  ('deposit_bonus_pct', '0'),
+  ('referral_bonus', '30'),
+  ('referral_commission', '5')
 on conflict (key) do nothing;
 
 -- settings_json + admin_save_settings rebuilt to carry the new keys
@@ -165,6 +167,8 @@ language sql stable security definer set search_path = public as $$
     'coin_usdt_rate', (public.get_setting('coin_usdt_rate'))::float8,
     'min_withdrawal', (public.get_setting('min_withdrawal'))::int,
     'daily_ad_limit', (public.get_setting('daily_ad_limit'))::int,
+    'referral_bonus', coalesce((public.get_setting('referral_bonus'))::int, 30),
+    'referral_commission', coalesce((public.get_setting('referral_commission'))::int, 5),
     'maintenance_mode', (public.get_setting('maintenance_mode'))::boolean,
     'admin_telegram_id', public.get_setting('admin_telegram_id'),
     'min_deposit', coalesce((public.get_setting('min_deposit'))::int, 100),
@@ -188,9 +192,16 @@ begin
   if p ? 'deposit_bonus_pct' and ((p->>'deposit_bonus_pct')::int < 0 or (p->>'deposit_bonus_pct')::int > 500) then
     raise exception 'Deposit bonus must be between 0 and 500 %%';
   end if;
+  if p ? 'referral_bonus' and (p->>'referral_bonus')::int < 0 then
+    raise exception 'Referral bonus cannot be negative';
+  end if;
+  if p ? 'referral_commission' and (p->>'referral_commission')::int < 0 then
+    raise exception 'Referral commission cannot be negative';
+  end if;
   foreach k in array array['ad_reward','task_reward','click_price','click_reward','min_campaign_budget',
     'bid_amount','bid_timer_sec','winner_pct','platform_pct','coin_usdt_rate','min_withdrawal',
     'daily_ad_limit','maintenance_mode','admin_telegram_id',
+    'referral_bonus','referral_commission',
     'min_deposit','deposit_bonus_pct','deposit_bep20_address','deposit_telebirr_number']
   loop
     if p ? k then

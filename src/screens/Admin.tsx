@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { fmt, timeAgo, usdtOf, type AdminStats, type AdminUserRow, type Ad, type BidRound, type Campaign, type Deposit, type MiniUser, type Settings, type Submission, type Task, type Tx, type Withdrawal } from "../lib/types";
 import { haptic } from "../lib/telegram";
-import { Avatar, Bar, Button, Chip, CopyBtn, Empty, Field, IcoBan, IcoCheck, IcoChev, IcoCoin, IcoDoc, IcoDownL, IcoGear, IcoGavel, IcoMega, IcoPause, IcoPlay, IcoPlus, IcoRefresh, IcoSearch, IcoShield, IcoStop, IcoUsers, IcoWallet, IcoX, Modal, Pill, Spinner, Toggle } from "../components/ui";
+import { Avatar, Bar, Button, Chip, CopyBtn, Empty, Field, IcoBan, IcoBell, IcoCheck, IcoChev, IcoCoin, IcoDoc, IcoDownL, IcoGear, IcoGavel, IcoMega, IcoPause, IcoPlay, IcoPlus, IcoRefresh, IcoSearch, IcoShield, IcoStop, IcoUsers, IcoWallet, IcoX, Modal, Pill, Spinner, Toggle } from "../components/ui";
+import { sanitizeHtml } from "../lib/sanitize";
+import type { Broadcast } from "../lib/types";
 import { TxRow } from "./Wallet";
 
-type ATab = "overview" | "users" | "content" | "campaigns" | "rounds" | "withdrawals" | "deposits" | "settings";
+type ATab = "overview" | "users" | "content" | "campaigns" | "rounds" | "withdrawals" | "deposits" | "broadcast" | "settings";
 const TABS: { v: ATab; label: string; icon: React.ReactNode }[] = [
   { v: "overview", label: "Overview", icon: <IcoDoc size={15} /> },
   { v: "users", label: "Users", icon: <IcoUsers size={15} /> },
@@ -14,6 +16,7 @@ const TABS: { v: ATab; label: string; icon: React.ReactNode }[] = [
   { v: "rounds", label: "Bid & Win", icon: <IcoGavel size={15} /> },
   { v: "withdrawals", label: "Withdrawals", icon: <IcoWallet size={15} /> },
   { v: "deposits", label: "Deposits", icon: <IcoDownL size={15} /> },
+  { v: "broadcast", label: "Broadcast", icon: <IcoBell size={15} /> },
   { v: "settings", label: "Settings", icon: <IcoGear size={15} /> },
 ];
 
@@ -49,6 +52,7 @@ export default function Admin({ onClose }: { onClose: () => void }) {
           {tab === "rounds" && <Rounds />}
           {tab === "withdrawals" && <Withdrawals />}
           {tab === "deposits" && <Deposits />}
+          {tab === "broadcast" && <Broadcasts />}
           {tab === "settings" && <SettingsTab />}
         </div>
       </div>
@@ -599,6 +603,85 @@ function Deposits() {
   );
 }
 
+/* ── broadcast popup ── */
+function Broadcasts() {
+  const { api, toast } = useApp();
+  const [active, setActive] = useState<Broadcast | null | "loading">("loading");
+  const [html, setHtml] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => { api.getBroadcast().then((b) => setActive(b)).catch(() => setActive(null)); }, [api]);
+  useEffect(load, [load]);
+
+  const send = async () => {
+    if (!html.trim()) { toast("Write a message first", "err"); return; }
+    setBusy(true);
+    const r = await api.adminSendBroadcast(html).catch((e) => ({ ok: false as const, error: String(e) }));
+    setBusy(false);
+    if (!r.ok) { toast(r.error ?? "Failed to send", "err"); return; }
+    haptic("success"); toast("Broadcast is live for all users", "ok");
+    setHtml(""); load();
+  };
+  const clear = async () => {
+    setBusy(true);
+    const r = await api.adminClearBroadcast().catch((e) => ({ ok: false as const, error: String(e) }));
+    setBusy(false);
+    if (!r.ok) { toast(r.error ?? "Failed", "err"); return; }
+    toast("Broadcast removed for everyone", "ok");
+    load();
+  };
+
+  return (
+    <div className="anim-fade">
+      <div className="text-[11.5px] text-dim leading-relaxed">
+        Send a popup to <b className="text-mut">every user's screen</b> (bottom of the app, with a close button).
+        Supports basic HTML: <code className="text-mut">&lt;b&gt; &lt;i&gt; &lt;u&gt; &lt;br&gt; &lt;a href&gt; &lt;span style="color:…"&gt;</code>.
+      </div>
+
+      {active === "loading" ? <div className="skeleton h-[70px] rounded-2xl mt-3" /> : active ? (
+        <div className="card border-gold/40 p-3.5 mt-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-7 h-7 rounded-lg bg-gold/15 border border-gold/40 text-gold flex items-center justify-center"><IcoBell size={14} /></span>
+            <span className="text-[12px] font-extrabold uppercase tracking-wider text-gold">Currently live</span>
+            <span className="text-[11px] text-dim ml-auto tnum">{timeAgo(active.created_at)}</span>
+          </div>
+          <div className="text-[13px] leading-relaxed break-words [&_a]:text-sky [&_a]:underline" dangerouslySetInnerHTML={{ __html: sanitizeHtml(active.body) }} />
+          <Button variant="danger" size="sm" className="mt-3" loading={busy} onClick={clear}><IcoX size={14} /> Remove for everyone</Button>
+        </div>
+      ) : (
+        <div className="card p-3.5 mt-3 text-[12.5px] text-dim flex items-center gap-2"><IcoBell size={15} /> No broadcast is currently active.</div>
+      )}
+
+      <div className="card p-4 mt-3">
+        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-2">New message (HTML)</div>
+        <textarea
+          value={html}
+          onChange={(e) => setHtml(e.target.value)}
+          rows={4}
+          maxLength={2000}
+          placeholder='<b>Big news!</b> Double rewards this weekend — <a href="https://t.me/yourchannel">join the channel</a> for details.'
+          className="input resize-none leading-relaxed font-mono text-[12.5px]"
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <span className="text-[10.5px] text-dim tnum">{html.length}/2000</span>
+          {html.trim() && <Chip tone="gold">Preview below</Chip>}
+        </div>
+        {html.trim() && (
+          <div className="mt-3 rounded-xl border border-line bg-abyss/60 p-3">
+            <div className="text-[10px] font-extrabold uppercase tracking-wider text-dim mb-1.5">How users will see it</div>
+            <div className="text-[13px] leading-relaxed break-words [&_a]:text-sky [&_a]:underline" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+          </div>
+        )}
+        <Button full className="mt-4" loading={busy} disabled={!html.trim()} onClick={send}>
+          <IcoBell size={16} /> Send to all users
+        </Button>
+        <p className="text-[10.5px] text-dim leading-relaxed mt-2">
+          Sending replaces any active broadcast. Users can close it; it won't reappear for them unless you send a new one.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ── settings ── */
 function SettingsTab() {
   const { api, toast, refreshCore } = useApp();
@@ -651,6 +734,13 @@ function SettingsTab() {
         <Field label="Telebirr number · Ethiopia (shown to users)"><input inputMode="numeric" className="input tnum" placeholder="09xxxxxxxx" value={s.deposit_telebirr_number ?? ""} onChange={(e) => str("deposit_telebirr_number", e.target.value)} /></Field>
         <div className="text-[11.5px] text-dim leading-relaxed mt-1">
           Users top up by sending USDT or Birr to these, then submit the payment proof — you review it in the <b className="text-mut">Deposits</b> tab. Leave a field empty to hide that method.
+        </div>
+      </div>
+      <div className="card p-4 mt-3">
+        <div className="text-[12px] font-extrabold uppercase tracking-wider text-mut mb-3">Proof of payouts</div>
+        <Field label="Public payouts channel URL"><input className="input" placeholder="https://t.me/yourpayoutschannel" value={s.payouts_channel_url ?? ""} onChange={(e) => str("payouts_channel_url", e.target.value)} /></Field>
+        <div className="text-[11.5px] text-dim leading-relaxed mt-1">
+          Bid wins and approved withdrawals are published automatically in the app's <b className="text-mut">Recent payouts</b> feed. Link your public Telegram channel here and users get a button to it — full transparency for advertisers and users alike.
         </div>
       </div>
       <div className="card p-4 mt-3">
