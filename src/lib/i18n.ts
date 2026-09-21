@@ -27,6 +27,7 @@ export const EN: Record<string, string> = {
 
   "h.welcome": "Welcome back",
   "h.watchAd": "Watch Ad", "h.watchCTA": "Watch · +{n} Coins",
+  "h.adLoading": "Loading ad system — please wait",
   "h.adNotReady": "Ad system loading — please try again in a moment",
   "h.adSkipped": "Watch the full ad to earn Coins",
   "h.rewardFailed": "Could not credit reward — please try again",

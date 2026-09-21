@@ -14,6 +14,7 @@ export const ES: Record<string, string> = {
 
   "h.welcome": "Bienvenido de nuevo",
   "h.watchAd": "Ver anuncio", "h.watchCTA": "Ver · +{n} Monedas",
+  "h.adLoading": "Cargando sistema de anuncios — por favor espera",
   "h.adNotReady": "El sistema de anuncios se está cargando — inténtalo de nuevo en un momento",
   "h.adSkipped": "Mira el anuncio completo para ganar Monedas",
   "h.rewardFailed": "No se pudo acreditar la recompensa — inténtalo de nuevo",
@@ -190,6 +191,7 @@ export const AR: Record<string, string> = {
 
   "h.welcome": "مرحبًا بعودتك",
   "h.watchAd": "شاهد الإعلان", "h.watchCTA": "شاهد · +{n} عملات",
+  "h.adLoading": "جاري تحميل نظام الإعلانات — يرجى الانتظار",
   "h.adNotReady": "نظام الإعلانات قيد التحميل — حاول مرة أخرى بعد قليل",
   "h.adSkipped": "شاهد الإعلان كاملاً لكسب العملات",
   "h.rewardFailed": "تعذر إضافة المكافأة — حاول مرة أخرى",
@@ -366,6 +368,7 @@ export const AM: Record<string, string> = {
 
   "h.welcome": "እንኳን ደህና መጡ",
   "h.watchAd": "ማስታወቂያ ይመልከቱ", "h.watchCTA": "ይመልከቱ · +{n} ኮይኖች",
+  "h.adLoading": "የማስታወቂያ ስርዓት በመጫን ላይ — እባክዎ ይጠብቁ",
   "h.adNotReady": "የማስታወቂያ ስርዓት በመጫን ላይ ነው — ትንሽ ቆይተው እንደገና ይሞክሩ",
   "h.adSkipped": "ኮይኖች ለማግኘት ማስታወቂያውን ሙሉ በሙሉ ይመልከቱ",
   "h.rewardFailed": "ሽልማቱን ማስገባት አልተቻለም — እንደገና ይሞክሩ",
@@ -542,6 +545,7 @@ export const RU: Record<string, string> = {
 
   "h.welcome": "С возвращением",
   "h.watchAd": "Смотреть рекламу", "h.watchCTA": "Смотреть · +{n} монет",
+  "h.adLoading": "Загрузка системы рекламы — пожалуйста, подождите",
   "h.adNotReady": "Система рекламы загружается — попробуйте через минуту",
   "h.adSkipped": "Посмотрите рекламу до конца, чтобы получить монеты",
   "h.rewardFailed": "Не удалось начислить награду — попробуйте ещё раз",
@@ -718,6 +722,7 @@ export const HI: Record<string, string> = {
 
   "h.welcome": "वापसी पर स्वागत है",
   "h.watchAd": "विज्ञापन देखें", "h.watchCTA": "देखें · +{n} सिक्के",
+  "h.adLoading": "विज्ञापन प्रणाली लोड हो रही है — कृपया प्रतीक्षा करें",
   "h.adNotReady": "विज्ञापन प्रणाली लोड हो रही है — कृपया थोड़ी देर में पुनः प्रयास करें",
   "h.adSkipped": "सिक्के कमाने के लिए पूरा विज्ञापन देखें",
   "h.rewardFailed": "इनाम क्रेडिट नहीं हो सका — कृपया पुनः प्रयास करें",
@@ -894,6 +899,7 @@ export const BN: Record<string, string> = {
 
   "h.welcome": "আবার স্বাগতম",
   "h.watchAd": "বিজ্ঞাপন দেখুন", "h.watchCTA": "দেখুন · +{n} কয়েন",
+  "h.adLoading": "বিজ্ঞাপন সিস্টেম লোড হচ্ছে — অনুগ্রহ করে অপেক্ষা করুন",
   "h.adNotReady": "বিজ্ঞাপন সিস্টেম লোড হচ্ছে — অনুগ্রহ করে কিছুক্ষণ পরে আবার চেষ্টা করুন",
   "h.adSkipped": "কয়েন আয় করতে পুরো বিজ্ঞাপনটি দেখুন",
   "h.rewardFailed": "পুরস্কার ক্রেডিট করা যায়নি — অনুগ্রহ করে আবার চেষ্টা করুন",

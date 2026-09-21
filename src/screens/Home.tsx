@@ -17,6 +17,27 @@ export default function Home() {
   const [payouts, setPayouts] = useState<PayoutEntry[]>([]);
   const [payoutsOpen, setPayoutsOpen] = useState(false);
   const [watchingAd, setWatchingAd] = useState(false);
+  const [sdkReady, setSdkReady] = useState(false);
+  const [sdkLoading, setSdkLoading] = useState(true);
+
+  // Wait for Monetag SDK to load (with 10 second timeout)
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 20; // 10 seconds total (20 * 500ms)
+    
+    const checkSdk = () => {
+      if (isMonetagReady()) {
+        setSdkReady(true);
+        setSdkLoading(false);
+      } else if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(checkSdk, 500);
+      } else {
+        setSdkLoading(false);
+      }
+    };
+    checkSdk();
+  }, []);
 
   // public proof-of-payouts feed — refresh on load, after rewards, and every minute
   const loadPayouts = () => api.recentPayouts().then(setPayouts).catch(() => {});
@@ -47,7 +68,11 @@ export default function Home() {
 
   const handleWatchAd = async () => {
     if (watchingAd) return;
-    if (!isMonetagReady()) {
+    if (sdkLoading) {
+      toast(tr("h.adLoading"), "info");
+      return;
+    }
+    if (!sdkReady) {
       toast(tr("h.adNotReady"), "err");
       return;
     }
@@ -143,10 +168,12 @@ export default function Home() {
           </span>
           <button
             onClick={handleWatchAd}
-            disabled={watchingAd}
+            disabled={watchingAd || sdkLoading}
             className="tap grow flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[15.5px] px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {watchingAd ? (
+              <Spinner size={18} className="text-[#241a05]" />
+            ) : sdkLoading ? (
               <Spinner size={18} className="text-[#241a05]" />
             ) : (
               <>
