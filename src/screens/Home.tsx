@@ -44,20 +44,19 @@ export default function Home() {
   // Initialize Adsgram SDK
   useEffect(() => {
     let attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 40; // 20 seconds total (40 * 500ms)
     
     const checkAdsgram = () => {
-      // Adsgram creates show_XXX() function, not window.Adsgram
-      if (typeof window !== "undefined" && (window as any)[`show_49922`]) {
-        const initialized = initAdsgram();
-        if (initialized) {
-          setAdsgramReady(true);
-        }
+      // Try to initialize - this will check if the function exists
+      const initialized = initAdsgram();
+      if (initialized) {
+        setAdsgramReady(true);
         setAdsgramLoading(false);
       } else if (attempts < maxAttempts) {
         attempts++;
         setTimeout(checkAdsgram, 500);
       } else {
+        // Timeout - SDK didn't load
         setAdsgramLoading(false);
       }
     };
