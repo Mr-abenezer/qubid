@@ -5,7 +5,7 @@ import { haptic, openLink } from "../lib/telegram";
 import { LANGS, useLang } from "../lib/i18n";
 import { showMonetagAd, isMonetagReady } from "../lib/monetag";
 import { initAdsgram, showAdsgramAd, isAdsgramReady } from "../lib/adsgram";
-import { Avatar, Button, Chip, CountUp, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoGlobe, IcoLink, IcoMega, IcoMoon, IcoPlane, IcoPlay, IcoShield, IcoSpark, IcoSun, IcoTrophy, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
+import { Avatar, Button, Chip, CountUp, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoGlobe, IcoLink, IcoMega, IcoMoon, IcoPlane, IcoPlay, IcoRefresh, IcoShield, IcoSpark, IcoSun, IcoTrophy, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
 
 export default function Home() {
   const { user, wallet, settings, tasks, ads, api, theme, setTheme, openProfile, setTab, toast, refreshTasks, refreshAds, refreshCore, setWalletBalance } = useApp();
@@ -21,6 +21,7 @@ export default function Home() {
   const [monetagLoading, setMonetagLoading] = useState(true);
   const [adsgramReady, setAdsgramReady] = useState(false);
   const [adsgramLoading, setAdsgramLoading] = useState(true);
+  const [adsgramFailed, setAdsgramFailed] = useState(false);
 
   // Wait for Monetag SDK to load (with 10 second timeout)
   useEffect(() => {
@@ -41,27 +42,64 @@ export default function Home() {
     checkSdk();
   }, []);
 
-  // Initialize Adsgram SDK
+  // Initialize Adsgram SDK using window.Adsgram.init()
   useEffect(() => {
     let attempts = 0;
-    const maxAttempts = 40; // 20 seconds total (40 * 500ms)
+    const maxAttempts = 30; // 15 seconds total (30 * 500ms)
+    let cancelled = false;
     
     const checkAdsgram = () => {
-      // Try to initialize - this will check if the function exists
-      const initialized = initAdsgram();
-      if (initialized) {
-        setAdsgramReady(true);
-        setAdsgramLoading(false);
-      } else if (attempts < maxAttempts) {
+      if (cancelled) return;
+      // Check if the SDK script has loaded (window.Adsgram exists)
+      if (window.Adsgram && typeof window.Adsgram.init === "function") {
+        // Initialize the ad controller
+        const initialized = initAdsgram();
+        if (initialized) {
+          setAdsgramReady(true);
+          setAdsgramLoading(false);
+          return;
+        }
+      }
+      if (attempts < maxAttempts) {
         attempts++;
         setTimeout(checkAdsgram, 500);
       } else {
         // Timeout - SDK didn't load
         setAdsgramLoading(false);
+        setAdsgramFailed(true);
       }
     };
     checkAdsgram();
+    return () => { cancelled = true; };
   }, []);
+
+  // Retry loading Adsgram SDK
+  const retryAdsgram = () => {
+    setAdsgramLoading(true);
+    setAdsgramFailed(false);
+    setAdsgramReady(false);
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    const checkAdsgram = () => {
+      if (window.Adsgram && typeof window.Adsgram.init === "function") {
+        const initialized = initAdsgram();
+        if (initialized) {
+          setAdsgramReady(true);
+          setAdsgramLoading(false);
+          return;
+        }
+      }
+      if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(checkAdsgram, 500);
+      } else {
+        setAdsgramLoading(false);
+        setAdsgramFailed(true);
+      }
+    };
+    checkAdsgram();
+  };
 
   // top-10 board — refresh every minute while the leaderboard is open
   useEffect(() => {
@@ -122,6 +160,12 @@ export default function Home() {
     if (watchingAd2) return;
     if (adsgramLoading) {
       toast(tr("h.adLoading"), "info");
+      return;
+    }
+    if (adsgramFailed) {
+      // SDK failed to load - offer retry
+      retryAdsgram();
+      toast("Retrying ad system…", "info");
       return;
     }
     if (!adsgramReady) {
@@ -238,11 +282,22 @@ export default function Home() {
           {/* Ad 2 - Adsgram */}
           <button
             onClick={handleWatchAd2}
-            disabled={watchingAd2 || adsgramLoading}
-            className="tap flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky to-sky/80 text-[#04182a] font-extrabold text-[13px] px-3 py-2.5 shadow-[0_6px_18px_-6px_rgba(78,178,255,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={watchingAd2 || (adsgramLoading && !adsgramFailed)}
+            className={`tap flex items-center justify-center gap-2 rounded-xl font-extrabold text-[13px] px-3 py-2.5 transition-[filter] ${
+              adsgramFailed
+                ? "bg-gradient-to-b from-orange-400 to-orange-500 text-white shadow-[0_6px_18px_-6px_rgba(251,146,60,0.6)] hover:brightness-105"
+                : "bg-gradient-to-b from-sky to-sky/80 text-[#04182a] shadow-[0_6px_18px_-6px_rgba(78,178,255,0.6)] hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            }`}
           >
-            {watchingAd2 || adsgramLoading ? (
+            {watchingAd2 ? (
+              <Spinner size={16} className={adsgramFailed ? "text-white" : "text-[#04182a]"} />
+            ) : adsgramLoading && !adsgramFailed ? (
               <Spinner size={16} className="text-[#04182a]" />
+            ) : adsgramFailed ? (
+              <>
+                <IcoRefresh size={16} />
+                <span>Retry</span>
+              </>
             ) : (
               <>
                 <IcoPlay size={16} />
