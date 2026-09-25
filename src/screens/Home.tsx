@@ -47,7 +47,8 @@ export default function Home() {
     const maxAttempts = 20;
     
     const checkAdsgram = () => {
-      if (typeof window !== "undefined" && window.Adsgram) {
+      // Adsgram creates show_XXX() function, not window.Adsgram
+      if (typeof window !== "undefined" && (window as any)[`show_49922`]) {
         const initialized = initAdsgram();
         if (initialized) {
           setAdsgramReady(true);
@@ -220,18 +221,16 @@ export default function Home() {
           <button
             onClick={handleWatchAd1}
             disabled={watchingAd1 || monetagLoading}
-            className="tap flex flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[14px] px-3 py-4 shadow-[0_8px_24px_-8px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tap flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[13px] px-3 py-2.5 shadow-[0_6px_18px_-6px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {watchingAd1 ? (
-              <Spinner size={20} className="text-[#241a05]" />
-            ) : monetagLoading ? (
-              <Spinner size={20} className="text-[#241a05]" />
+            {watchingAd1 || monetagLoading ? (
+              <Spinner size={16} className="text-[#241a05]" />
             ) : (
               <>
-                <IcoPlay size={20} />
+                <IcoPlay size={16} />
                 <span>Ad 1</span>
-                <span className="flex items-center gap-1 rounded-full bg-[#241a05]/15 px-2 py-0.5 text-[12px] tnum">
-                  <IcoCoin size={12} /> +{adReward}
+                <span className="flex items-center gap-0.5 rounded-full bg-[#241a05]/15 px-1.5 py-0.5 text-[11px] tnum">
+                  <IcoCoin size={10} /> +{adReward}
                 </span>
               </>
             )}
@@ -241,18 +240,16 @@ export default function Home() {
           <button
             onClick={handleWatchAd2}
             disabled={watchingAd2 || adsgramLoading}
-            className="tap flex flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky to-sky/80 text-[#04182a] font-extrabold text-[14px] px-3 py-4 shadow-[0_8px_24px_-8px_rgba(78,178,255,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tap flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky to-sky/80 text-[#04182a] font-extrabold text-[13px] px-3 py-2.5 shadow-[0_6px_18px_-6px_rgba(78,178,255,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {watchingAd2 ? (
-              <Spinner size={20} className="text-[#04182a]" />
-            ) : adsgramLoading ? (
-              <Spinner size={20} className="text-[#04182a]" />
+            {watchingAd2 || adsgramLoading ? (
+              <Spinner size={16} className="text-[#04182a]" />
             ) : (
               <>
-                <IcoPlay size={20} />
+                <IcoPlay size={16} />
                 <span>Ad 2</span>
-                <span className="flex items-center gap-1 rounded-full bg-[#04182a]/15 px-2 py-0.5 text-[12px] tnum">
-                  <IcoCoin size={12} /> +{adReward}
+                <span className="flex items-center gap-0.5 rounded-full bg-[#04182a]/15 px-1.5 py-0.5 text-[11px] tnum">
+                  <IcoCoin size={10} /> +{adReward}
                 </span>
               </>
             )}
