@@ -4,6 +4,7 @@ import { fmt, timeAgo, timeLeft, type Ad, type ActionResult, type LeaderboardRow
 import { haptic, openLink } from "../lib/telegram";
 import { LANGS, useLang } from "../lib/i18n";
 import { showMonetagAd, isMonetagReady } from "../lib/monetag";
+import { initAdsgram, showAdsgramAd, isAdsgramReady } from "../lib/adsgram";
 import { Avatar, Button, Chip, CountUp, IcoCheck, IcoClock, IcoCoin, IcoEye, IcoGlobe, IcoLink, IcoMega, IcoMoon, IcoPlane, IcoPlay, IcoShield, IcoSpark, IcoSun, IcoTrophy, IcoUpR, Modal, Ring, SectionH, Spinner } from "../components/ui";
 
 export default function Home() {
@@ -14,9 +15,12 @@ export default function Home() {
   const [board, setBoard] = useState<LeaderboardRow[]>([]);
   const [task, setTask] = useState<Task | null>(null);
   const [ad, setAd] = useState<Ad | null>(null);
-  const [watchingAd, setWatchingAd] = useState(false);
-  const [sdkReady, setSdkReady] = useState(false);
-  const [sdkLoading, setSdkLoading] = useState(true);
+  const [watchingAd1, setWatchingAd1] = useState(false);
+  const [watchingAd2, setWatchingAd2] = useState(false);
+  const [monetagReady, setMonetagReady] = useState(false);
+  const [monetagLoading, setMonetagLoading] = useState(true);
+  const [adsgramReady, setAdsgramReady] = useState(false);
+  const [adsgramLoading, setAdsgramLoading] = useState(true);
 
   // Wait for Monetag SDK to load (with 10 second timeout)
   useEffect(() => {
@@ -25,16 +29,38 @@ export default function Home() {
     
     const checkSdk = () => {
       if (isMonetagReady()) {
-        setSdkReady(true);
-        setSdkLoading(false);
+        setMonetagReady(true);
+        setMonetagLoading(false);
       } else if (attempts < maxAttempts) {
         attempts++;
         setTimeout(checkSdk, 500);
       } else {
-        setSdkLoading(false);
+        setMonetagLoading(false);
       }
     };
     checkSdk();
+  }, []);
+
+  // Initialize Adsgram SDK
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    const checkAdsgram = () => {
+      if (typeof window !== "undefined" && window.Adsgram) {
+        const initialized = initAdsgram();
+        if (initialized) {
+          setAdsgramReady(true);
+        }
+        setAdsgramLoading(false);
+      } else if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(checkAdsgram, 500);
+      } else {
+        setAdsgramLoading(false);
+      }
+    };
+    checkAdsgram();
   }, []);
 
   // top-10 board — refresh every minute while the leaderboard is open
@@ -56,17 +82,17 @@ export default function Home() {
   const onReward = () => { refreshTasks(); refreshAds(); refreshCore(); };
   const myRank = board.find((r) => r.me)?.rank ?? 0;
 
-  const handleWatchAd = async () => {
-    if (watchingAd) return;
-    if (sdkLoading) {
+  const handleWatchAd1 = async () => {
+    if (watchingAd1) return;
+    if (monetagLoading) {
       toast(tr("h.adLoading"), "info");
       return;
     }
-    if (!sdkReady) {
+    if (!monetagReady) {
       toast(tr("h.adNotReady"), "err");
       return;
     }
-    setWatchingAd(true);
+    setWatchingAd1(true);
     haptic("medium");
     try {
       await showMonetagAd();
@@ -88,7 +114,47 @@ export default function Home() {
       toast(tr("h.adSkipped"), "info");
       haptic("light");
     } finally {
-      setWatchingAd(false);
+      setWatchingAd1(false);
+    }
+  };
+
+  const handleWatchAd2 = async () => {
+    if (watchingAd2) return;
+    if (adsgramLoading) {
+      toast(tr("h.adLoading"), "info");
+      return;
+    }
+    if (!adsgramReady) {
+      toast(tr("h.adNotReady"), "err");
+      return;
+    }
+    setWatchingAd2(true);
+    haptic("medium");
+    try {
+      const completed = await showAdsgramAd();
+      if (completed) {
+        // User watched the ad to completion - credit the reward
+        const res = await api.completeRewardAd();
+        if (res.ok) {
+          if (res.balance !== undefined) {
+            setWalletBalance(res.balance);
+          }
+          toast(tr("h.rewardCredited", { n: adReward }), "ok");
+          haptic("success");
+          onReward();
+        } else {
+          toast(res.error || tr("h.rewardFailed"), "err");
+          haptic("error");
+        }
+      } else {
+        toast(tr("h.adSkipped"), "info");
+        haptic("light");
+      }
+    } catch (error) {
+      toast(tr("h.adSkipped"), "info");
+      haptic("light");
+    } finally {
+      setWatchingAd2(false);
     }
   };
 
@@ -147,27 +213,46 @@ export default function Home() {
         </div>
       </div>
 
-      {/* watch ad — Monetag rewarded interstitial */}
-      <div className="holo-border mt-4 anim-rise" style={{ animationDelay: "120ms" }}>
-        <div className="holo-inner p-4 flex items-center gap-3.5">
-          <span className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-gold/25 to-coral/15 border border-gold/35 text-gold flex items-center justify-center shrink-0">
-            <IcoPlay size={22} />
-          </span>
+      {/* watch ad — two ad buttons side by side */}
+      <div className="mt-4 anim-rise" style={{ animationDelay: "120ms" }}>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Ad 1 - Monetag */}
           <button
-            onClick={handleWatchAd}
-            disabled={watchingAd || sdkLoading}
-            className="tap grow flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[15.5px] px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleWatchAd1}
+            disabled={watchingAd1 || monetagLoading}
+            className="tap flex flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-gold to-gold2 text-[#241a05] font-extrabold text-[14px] px-3 py-4 shadow-[0_8px_24px_-8px_rgba(255,194,75,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {watchingAd ? (
-              <Spinner size={18} className="text-[#241a05]" />
-            ) : sdkLoading ? (
-              <Spinner size={18} className="text-[#241a05]" />
+            {watchingAd1 ? (
+              <Spinner size={20} className="text-[#241a05]" />
+            ) : monetagLoading ? (
+              <Spinner size={20} className="text-[#241a05]" />
             ) : (
               <>
-                <IcoPlay size={18} />
-                {tr("h.watchAd")}
-                <span className="flex items-center gap-1 rounded-full bg-[#241a05]/15 px-2 py-0.5 text-[13px] tnum">
-                  <IcoCoin size={13} /> +{adReward}
+                <IcoPlay size={20} />
+                <span>Ad 1</span>
+                <span className="flex items-center gap-1 rounded-full bg-[#241a05]/15 px-2 py-0.5 text-[12px] tnum">
+                  <IcoCoin size={12} /> +{adReward}
+                </span>
+              </>
+            )}
+          </button>
+
+          {/* Ad 2 - Adsgram */}
+          <button
+            onClick={handleWatchAd2}
+            disabled={watchingAd2 || adsgramLoading}
+            className="tap flex flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky to-sky/80 text-[#04182a] font-extrabold text-[14px] px-3 py-4 shadow-[0_8px_24px_-8px_rgba(78,178,255,0.6)] hover:brightness-105 transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {watchingAd2 ? (
+              <Spinner size={20} className="text-[#04182a]" />
+            ) : adsgramLoading ? (
+              <Spinner size={20} className="text-[#04182a]" />
+            ) : (
+              <>
+                <IcoPlay size={20} />
+                <span>Ad 2</span>
+                <span className="flex items-center gap-1 rounded-full bg-[#04182a]/15 px-2 py-0.5 text-[12px] tnum">
+                  <IcoCoin size={12} /> +{adReward}
                 </span>
               </>
             )}
